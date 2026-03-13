@@ -102,7 +102,8 @@ def send_verification_email(to_email, username, token):
     smtp_port = int(os.environ.get('SMTP_PORT', 587))
     smtp_user = os.environ.get('SMTP_USERNAME')
     smtp_pass = os.environ.get('SMTP_PASSWORD')
-    app_url = os.environ.get('APP_URL', 'http://localhost:5000')
+    # Auto-detect URL from Render environment or use localhost for local dev
+    app_url = os.environ.get('RENDER_EXTERNAL_URL') or os.environ.get('APP_URL', 'http://localhost:5000')
 
     verification_link = f"{app_url}/verify-email?token={token}"
 
@@ -161,7 +162,8 @@ def send_reset_email(to_email, reset_code, username):
     smtp_port = int(os.environ.get('SMTP_PORT', 587))
     smtp_user = os.environ.get('SMTP_USERNAME')
     smtp_pass = os.environ.get('SMTP_PASSWORD')
-    app_url = os.environ.get('APP_URL', 'http://localhost:5000')
+    # Auto-detect URL from Render environment or use localhost for local dev
+    app_url = os.environ.get('RENDER_EXTERNAL_URL') or os.environ.get('APP_URL', 'http://localhost:5000')
     
     # If SMTP not configured, return False
     if not smtp_user or not smtp_pass:
