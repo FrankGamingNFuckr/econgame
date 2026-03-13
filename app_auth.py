@@ -143,6 +143,7 @@ If you did not create this account, you can ignore this email.
         return True, verification_link
     except Exception as e:
         print(f"ERROR: Failed to send verification email: {e}")
+        return False, verification_link
         print(f"DEV VERIFICATION LINK for {to_email}: {verification_link}")
         return False, verification_link
 
