@@ -220,6 +220,8 @@ def load_json(file, default):
     return default
 
 def save_json(file, data):
+    # Ensure parent directory exists
+    file.parent.mkdir(parents=True, exist_ok=True)
     with open(file, 'w') as f:
         json.dump(data, f, indent=2)
 
