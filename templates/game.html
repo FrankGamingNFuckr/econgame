@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EconGame - Full Economy Simulator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='game.css') }}">
+</head>
+<body>
+    <!-- Header with stats -->
+    <header>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h1>💰 EconGame - Economy Simulator</h1>
+            <div style="text-align: right;">
+                <div style="font-size: 1.1rem; font-weight: bold;">
+                    {{ username }}
+                    {% if is_moderator %}
+                    <span style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
+                                 color: white; 
+                                 padding: 4px 10px; 
+                                 border-radius: 5px; 
+                                 font-size: 0.8rem; 
+                                 margin-left: 8px;">
+                        🛡️ MODERATOR
+                    </span>
+                    {% endif %}
+                </div>
+                <a href="/logout" style="color: white; text-decoration: none; font-size: 0.9rem; opacity: 0.8;">Logout →</a>
+            </div>
+        </div>
+        <div class="header-stats">
+            <div class="stat">
+                <span class="label">Checking:</span>
+                <span id="stat-checking" class="value">$0</span>
+            </div>
+            <div class="stat">
+                <span class="label">Savings:</span>
+                <span id="stat-savings" class="value">$0</span>
+            </div>
+            <div class="stat">
+                <span class="label">Pockets:</span>
+                <span id="stat-pockets" class="value">$0</span>
+            </div>
+            <div class="stat">
+                <span class="label">Emergency:</span>
+                <span id="stat-emergency" class="value">$0</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="tabs">
+        <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+        <button class="tab-btn" data-tab="banking">Banking</button>
+        <button class="tab-btn" data-tab="work">Work</button>
+        <button class="tab-btn" data-tab="businesses">Businesses</button>
+        <button class="tab-btn" data-tab="stocks">Stocks</button>
+        <button class="tab-btn" data-tab="crypto">Crypto</button>
+        <button class="tab-btn" data-tab="loans">Loans</button>
+        <button class="tab-btn" data-tab="shop">Shop</button>
+        <button class="tab-btn" data-tab="robbery">Robbery</button>
+        <button class="tab-btn" data-tab="leaderboard">Leaderboard</button>
+        {% if is_moderator %}
+        <button class="tab-btn" data-tab="admin">Admin</button>
+        {% endif %}
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="container">
+        <!-- Dashboard Tab -->
+        <div id="tab-dashboard" class="tab-content active">
+            <h2>📊 Dashboard</h2>
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h3>💵 Total Net Worth</h3>
+                    <p class="big-number" id="total-worth">$0</p>
+                </div>
+                <div class="card">
+                    <h3>🏢 Businesses Owned</h3>
+                    <p class="big-number" id="business-count">0</p>
+                </div>
+                <div class="card">
+                    <h3>📈 Stock Portfolio Value</h3>
+                    <p class="big-number" id="portfolio-value">$0</p>
+                </div>
+                <div class="card">
+                    <h3>💎 Crypto Wallet Value</h3>
+                    <p class="big-number" id="crypto-value">$0</p>
+                </div>
+            </div>
+            
+            <div class="info-box">
+                <h3>📢 Economic Status</h3>
+                <p id="gov-shutdown-status"></p>
+                <p id="recession-status"></p>
+                <p id="interest-rate-status"></p>
+            </div>
+
+            <div class="card" style="margin-top: 20px;">
+                <h3>🎭 Advisor</h3>
+                <p style="margin-bottom: 10px;">Choose an advisor to apply gameplay modifiers.</p>
+                <select id="advisor-select" style="padding: 8px; margin-right: 8px; min-width: 260px;"></select>
+                <button onclick="setAdvisor()" class="btn btn-primary">Apply Advisor</button>
+                <p id="advisor-description" style="margin-top: 10px;"></p>
+            </div>
+
+            <div class="card" style="margin-top: 20px;">
+                <h3>🔔 Notifications <span id="notif-unread" class="text-warning"></span></h3>
+                <button onclick="markAllNotificationsRead()" class="btn btn-success" style="margin-bottom: 10px;">Mark All Read</button>
+                <div id="notifications-list"></div>
+            </div>
+        </div>
+
+        <!-- Banking Tab -->
+        <div id="tab-banking" class="tab-content">
+            <h2>🏦 Banking</h2>
+            
+            <div id="create-account-section">
+                <div class="card">
+                    <h3>Create Account</h3>
+                    <p>Choose your primary account type:</p>
+                    <button onclick="createAccount('checking')" class="btn btn-primary">Create Checking Account</button>
+                    <button onclick="createAccount('savings')" class="btn btn-success">Create Savings Account</button>
+                </div>
+            </div>
+            
+            <div id="banking-controls" style="display: none;">
+                <div class="card">
+                    <h3>Deposit</h3>
+                    <input type="number" id="deposit-amount" placeholder="Amount" min="1">
+                    <select id="deposit-target">
+                        <option value="checking">Checking</option>
+                        <option value="savings">Savings</option>
+                        <option value="emergency">Emergency Fund</option>
+                    </select>
+                    <button onclick="deposit()" class="btn btn-primary">Deposit</button>
+                </div>
+                
+                <div class="card">
+                    <h3>Withdraw</h3>
+                    <input type="number" id="withdraw-amount" placeholder="Amount" min="1">
+                    <select id="withdraw-source">
+                        <option value="checking">Checking</option>
+                        <option value="savings">Savings</option>
+                        <option value="emergency">Emergency Fund</option>
+                    </select>
+                    <button onclick="withdraw()" class="btn btn-primary">Withdraw</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Work Tab -->
+        <div id="tab-work" class="tab-content">
+            <h2>💼 Work</h2>
+            
+            <div class="work-buttons">
+                <div class="card">
+                    <h3>🔨 Regular Work</h3>
+                    <p>Earn $50-$200 per job</p>
+                    <p class="cooldown-text" id="work-cooldown"></p>
+                    <button onclick="doWork()" class="btn btn-large btn-work">Work</button>
+                </div>
+                
+                <div class="card">
+                    <h3>🏛️ Government Job</h3>
+                    <p>Higher pay but taxes apply</p>
+                    <p class="cooldown-text" id="workgov-cooldown"></p>
+                    <button onclick="doWorkGov()" class="btn btn-large btn-gov">Work for Government</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Businesses Tab -->
+        <div id="tab-businesses" class="tab-content">
+            <h2>🏢 Businesses</h2>
+            
+            <div class="card">
+                <h3>Create New Business</h3>
+                <p>Cost: $50,000</p>
+                <input type="text" id="business-name" placeholder="Business Name" maxlength="30">
+                <select id="business-type">
+                    <option value="general">General</option>
+                    <option value="tech">Tech Company</option>
+                    <option value="retail">Retail Store</option>
+                    <option value="restaurant">Restaurant</option>
+                </select>
+                <button onclick="createBusiness()" class="btn btn-success">Create Business</button>
+            </div>
+            
+            <div id="businesses-list"></div>
+
+            <div class="card" style="margin-top: 20px; border: 2px dashed #b33;">
+                <h3>🕶️ Illegal Businesses (MVP)</h3>
+                <p>High risk, high reward. Police raids can happen.</p>
+                <input type="text" id="illegal-business-name" placeholder="Operation Name" maxlength="40">
+                <select id="illegal-business-type">
+                    <option value="black_market">Black Market Stall</option>
+                    <option value="counterfeit_lab">Counterfeit Lab</option>
+                </select>
+                <button onclick="createIllegalBusiness()" class="btn btn-danger">Start Illegal Operation</button>
+            </div>
+
+            <h3>Illegal Operations</h3>
+            <div id="illegal-businesses-list"></div>
+        </div>
+
+        <!-- Stocks Tab -->
+        <div id="tab-stocks" class="tab-content">
+            <h2>📈 Stock Market</h2>
+            
+            <div id="stocks-list"></div>
+            
+            <h3>Your Portfolio</h3>
+            <div id="portfolio-list"></div>
+        </div>
+
+        <!-- Crypto Tab -->
+        <div id="tab-crypto" class="tab-content">
+            <h2>₿ Cryptocurrency</h2>
+            
+            <div id="crypto-list"></div>
+            
+            <h3>Your Wallet</h3>
+            <div id="wallet-list"></div>
+        </div>
+
+        <!-- Loans Tab -->
+        <div id="tab-loans" class="tab-content">
+            <h2>💳 Loans</h2>
+            
+            <div class="card">
+                <h3>Take Out a Loan</h3>
+                <p>Interest Rate: <span id="interest-rate">3</span>% daily</p>
+                <input type="number" id="loan-amount" placeholder="Amount (max $100,000)" min="1" max="100000">
+                <select id="loan-type">
+                    <option value="regular">Regular Loan</option>
+                    <option value="stock">Stock Loan</option>
+                </select>
+                <button onclick="takeLoan()" class="btn btn-primary">Take Loan</button>
+            </div>
+            
+            <div id="loans-list"></div>
+        </div>
+
+        <!-- Shop Tab -->
+        <div id="tab-shop" class="tab-content">
+            <h2>🛒 Shop</h2>
+            
+            <div id="shop-items"></div>
+            
+            <h3>Your Inventory</h3>
+            <div id="inventory-list"></div>
+        </div>
+
+        <!-- Robbery Tab -->
+        <div id="tab-robbery" class="tab-content">
+            <h2>🦹 Robbery & Crime</h2>
+            
+            <div class="card">
+                <h3>💰 Buy Insurance</h3>
+                <p>Protect yourself from robberies! Cost: $10,000</p>
+                <p>If robbed, insurance pays back 50% of stolen amount</p>
+                <button onclick="buyInsurance()" class="btn btn-success">Buy Insurance</button>
+            </div>
+            
+            <div class="card">
+                <h3>🔫 Rob Another Player</h3>
+                <p>⚠️ Warning: 50% chance of getting caught and jailed for 2 minutes!</p>
+                <input type="text" id="rob-target-id" placeholder="Target Player ID (first 8 chars)">
+                <p class="cooldown-text" id="rob-cooldown"></p>
+                <button onclick="robPlayer()" class="btn btn-danger">Rob Player</button>
+            </div>
+            
+            <div class="card" id="jail-status" style="display: none; background: #ffcccc;">
+                <h3>⛓️ You are in Jail!</h3>
+                <p id="jail-time"></p>
+            </div>
+        </div>
+
+        <!-- Leaderboard Tab -->
+        <div id="tab-leaderboard" class="tab-content">
+            <h2>🏆 Leaderboard - Top 10 Richest Players</h2>
+            <div id="leaderboard-list"></div>
+        </div>
+
+        <!-- Admin Tab -->
+        {% if is_moderator %}
+        <div id="tab-admin" class="tab-content">
+            <h2>⚙️ Admin Controls</h2>
+            <p><small>Moderator access granted</small></p>
+            
+            <div class="card">
+                <h3>Economic Controls</h3>
+                <button onclick="toggleShutdown()" class="btn" id="shutdown-btn">Toggle Government Shutdown</button>
+                <button onclick="toggleRecession()" class="btn" id="recession-btn">Toggle Recession</button>
+                <button onclick="processHourly()" class="btn btn-primary">Process Hourly Updates</button>
+            </div>
+            
+            <div class="card">
+                <h3>Your Player ID</h3>
+                <p id="player-id-display" style="font-family: monospace; background: #f0f0f0; padding: 10px;"></p>
+                <p><small>Share this with others if you want them to rob you (for testing)</small></p>
+            </div>
+        </div>
+        {% endif %}
+    </main>
+
+    <!-- Message Popup -->
+    <div class="modal" id="message-modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <div id="modal-message"></div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='game.js') }}"></script>
+</body>
+</html>

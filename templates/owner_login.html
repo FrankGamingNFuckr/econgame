@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Owner Login - EconGame</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: #1e1e2e;
+            border: 1px solid #e94560;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 0 40px rgba(233, 69, 96, 0.3);
+            width: 90%;
+            max-width: 420px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .icon { font-size: 3rem; margin-bottom: 10px; }
+
+        h1 { color: #e94560; font-size: 1.8rem; margin-bottom: 6px; }
+
+        .subtitle { color: #888; font-size: 0.9rem; }
+
+        .form-group { margin-bottom: 20px; }
+
+        label { display: block; color: #ccc; margin-bottom: 8px; font-weight: 600; }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 12px 15px;
+            background: #2a2a3e;
+            border: 2px solid #444;
+            border-radius: 8px;
+            font-size: 1rem;
+            color: #eee;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #e94560 0%, #c62a47 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            letter-spacing: 0.5px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(233, 69, 96, 0.5);
+        }
+
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        .message {
+            margin-bottom: 20px;
+            padding: 12px 15px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            display: none;
+        }
+
+        .message.error { background: #3a1a1a; color: #f88; border: 1px solid #a33; }
+        .message.success { background: #1a3a1a; color: #8f8; border: 1px solid #3a3; }
+
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .back-link a {
+            color: #e94560;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .back-link a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="icon">👑</div>
+            <h1>Owner Access</h1>
+            <p class="subtitle">Restricted — authorized personnel only</p>
+        </div>
+
+        <div id="message" class="message"></div>
+
+        <form id="ownerLoginForm" onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required autocomplete="off">
+            </div>
+            <button type="submit" class="btn" id="loginBtn">🔐 Login as Owner</button>
+        </form>
+
+        <div class="back-link">
+            <a href="/">← Back to Home</a>
+        </div>
+    </div>
+
+    <script>
+        async function handleLogin(event) {
+            event.preventDefault();
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const messageDiv = document.getElementById('message');
+            const loginBtn = document.getElementById('loginBtn');
+
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'Authenticating...';
+
+            try {
+                const response = await fetch('/owner-login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    messageDiv.className = 'message success';
+                    messageDiv.textContent = data.message;
+                    messageDiv.style.display = 'block';
+                    setTimeout(() => { window.location.href = '/owner-dashboard'; }, 800);
+                } else {
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = data.error || 'Authentication failed.';
+                    messageDiv.style.display = 'block';
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = '🔐 Login as Owner';
+                }
+            } catch (error) {
+                messageDiv.className = 'message error';
+                messageDiv.textContent = 'Connection error. Please try again.';
+                messageDiv.style.display = 'block';
+                loginBtn.disabled = false;
+                loginBtn.textContent = '🔐 Login as Owner';
+            }
+        }
+    </script>
+</body>
+</html>

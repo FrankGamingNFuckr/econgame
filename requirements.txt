@@ -1,0 +1,21 @@
+# EconGame Production Requirements
+
+# Core Framework
+Flask>=3.0.0
+
+# Production Server
+gunicorn>=21.0.0
+
+# Security & Rate Limiting
+flask-limiter>=3.5.0
+
+# Environment Variables
+python-dotenv>=1.0.0
+
+# Optional: Database (if migrating from JSON)
+# psycopg2-binary>=2.9.0
+# flask-sqlalchemy>=3.1.0
+
+# Optional: Email Services (uncomment what you use)
+# sendgrid>=6.10.0  # For SendGrid
+# flask-mail>=0.9.1  # For SMTP

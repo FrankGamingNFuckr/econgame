@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EconGame - Economic Simulation Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 90%;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .logo {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .tagline {
+            font-size: 1.3rem;
+            margin-bottom: 50px;
+            opacity: 0.95;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+        }
+
+        .btn {
+            padding: 18px 40px;
+            font-size: 1.2rem;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn-primary {
+            background: white;
+            color: #667eea;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 2px solid white;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        .btn-admin {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            font-size: 1rem;
+            padding: 14px 30px;
+        }
+
+        .btn-admin:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(245, 87, 108, 0.4);
+        }
+
+        .features {
+            margin-top: 60px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            text-align: left;
+        }
+
+        .feature {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .feature h3 {
+            font-size: 1.2rem;
+            margin-bottom: 8px;
+        }
+
+        .feature p {
+            font-size: 0.95rem;
+            opacity: 0.9;
+        }
+
+        .divider {
+            margin: 40px 0 20px 0;
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">💰</div>
+        <h1>EconGame</h1>
+        <p class="tagline">Build your economic empire. Work, invest, and dominate the leaderboard!</p>
+
+        <div class="buttons">
+            <a href="/login" class="btn btn-primary">Login</a>
+            <a href="/register" class="btn btn-secondary">Create Account</a>
+        </div>
+
+        <div class="divider">━━━━━━━━━━━━</div>
+        
+        <div class="buttons">
+            <a href="/moderator-login" class="btn btn-admin">🛡️ Moderator Login</a>
+        </div>
+
+        <div class="features">
+            <div class="feature">
+                <div class="feature-icon">💼</div>
+                <h3>Work & Earn</h3>
+                <p>Start with simple jobs or work for the government for bigger payouts.</p>
+            </div>
+            
+            <div class="feature">
+                <div class="feature-icon">🏦</div>
+                <h3>Banking</h3>
+                <p>Manage multiple accounts: checking, savings, emergency fund, and pockets.</p>
+            </div>
+            
+            <div class="feature">
+                <div class="feature-icon">🏢</div>
+                <h3>Businesses</h3>
+                <p>Create and manage your own companies. Hire workers and generate revenue.</p>
+            </div>
+            
+            <div class="feature">
+                <div class="feature-icon">📈</div>
+                <h3>Stock Market</h3>
+                <p>Trade stocks, watch the market, and build your portfolio.</p>
+            </div>
+            
+            <div class="feature">
+                <div class="feature-icon">₿</div>
+                <h3>Cryptocurrency</h3>
+                <p>Invest in Bitcoin, Ethereum, and Dogecoin. Ride the waves!</p>
+            </div>
+            
+            <div class="feature">
+                <div class="feature-icon">🏆</div>
+                <h3>Compete</h3>
+                <p>Climb the leaderboard and become the richest player in the game.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
