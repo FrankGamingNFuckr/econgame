@@ -134,7 +134,8 @@ If you did not create this account, you can ignore this email.
     msg['To'] = to_email
 
     try:
-        server = smtplib.SMTP(smtp_server, smtp_port)
+        # Add timeout to prevent hanging
+        server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
         server.starttls()
         server.login(smtp_user, smtp_pass)
         server.send_message(msg)
@@ -143,6 +144,7 @@ If you did not create this account, you can ignore this email.
         return True, verification_link
     except Exception as e:
         print(f"ERROR: Failed to send verification email: {e}")
+        print(f"DEV VERIFICATION LINK for {to_email}: {verification_link}")
         return False, verification_link
         print(f"DEV VERIFICATION LINK for {to_email}: {verification_link}")
         return False, verification_link
@@ -197,7 +199,8 @@ If you didn't request this, you can safely ignore this email.
     msg['To'] = to_email
     
     try:
-        server = smtplib.SMTP(smtp_server, smtp_port)
+        # Add timeout to prevent hanging
+        server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
         server.starttls()
         server.login(smtp_user, smtp_pass)
         server.send_message(msg)
