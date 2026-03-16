@@ -371,11 +371,6 @@ async function createAccount(type) {
     }
 }
 
-function setDepositAmount(amount) {
-    const input = document.getElementById('deposit-amount');
-    input.value = amount;
-}
-
 async function deposit() {
     const amountStr = document.getElementById('deposit-amount').value;
     const amount = parseInt(amountStr);
@@ -411,11 +406,6 @@ async function deposit() {
     } catch (error) {
         showModal('❌ Error depositing');
     }
-}
-
-function setWithdrawAmount(amount) {
-    const input = document.getElementById('withdraw-amount');
-    input.value = amount;
 }
 
 async function withdraw() {
