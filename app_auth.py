@@ -36,9 +36,9 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
 try:
     from app_full import bp as full_bp
     app.register_blueprint(full_bp)
-    print('✅ app_full.py blueprint loaded successfully')
+    print('[OK] app_full.py blueprint loaded successfully')
 except Exception as e:
-    print(f'❌ ERROR: Failed to load app_full.py blueprint: {e}')
+    print(f'[ERROR] Failed to load app_full.py blueprint: {e}')
     import traceback
     traceback.print_exc()
     # Re-raise so the error is visible
