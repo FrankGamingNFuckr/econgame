@@ -371,29 +371,9 @@ async function createAccount(type) {
     }
 }
 
-async function setDepositAmount(amount) {
+function setDepositAmount(amount) {
     const input = document.getElementById('deposit-amount');
-    if (amount === 'all') {
-        // Fetch fresh balance data for "All" button to prevent stale data issues
-        try {
-            const response = await fetch('/api/balance');
-            const data = await response.json();
-            const pockets = data.pockets || 0;
-            input.value = pockets;
-            if (pockets <= 0) {
-                showModal('❌ No cash in pockets to deposit');
-            }
-        } catch (error) {
-            // Fallback to cached balance if fetch fails
-            const pockets = currentBalance?.pockets || 0;
-            input.value = pockets;
-            if (pockets <= 0) {
-                showModal('❌ No cash in pockets to deposit');
-            }
-        }
-    } else {
-        input.value = amount;
-    }
+    input.value = amount;
 }
 
 async function deposit() {
@@ -433,31 +413,9 @@ async function deposit() {
     }
 }
 
-async function setWithdrawAmount(amount) {
+function setWithdrawAmount(amount) {
     const input = document.getElementById('withdraw-amount');
-    const source = document.getElementById('withdraw-source').value;
-    
-    if (amount === 'all') {
-        // Fetch fresh balance data for "All" button to prevent stale data issues
-        try {
-            const response = await fetch('/api/balance');  
-            const data = await response.json();
-            const maxAmount = data[source] || 0;
-            input.value = maxAmount;
-            if (maxAmount <= 0) {
-                showModal(`❌ No funds available in ${source}`);
-            }
-        } catch (error) {
-            // Fallback to cached balance if fetch fails
-            const maxAmount = currentBalance?.[source] || 0;
-            input.value = maxAmount;
-            if (maxAmount <= 0) {
-                showModal(`❌ No funds available in ${source}`);
-            }
-        }
-    } else {
-        input.value = amount;
-    }
+    input.value = amount;
 }
 
 async function withdraw() {
