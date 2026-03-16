@@ -19,7 +19,7 @@ except ImportError:
     pass  # python-dotenv not installed, that's okay
 
 app = Flask(__name__)
-FAVICON_VERSION = '20260315b'
+FAVICON_VERSION = '20260316a'
 STATIC_ASSET_VERSION = '20260315c'
 
 # Use environment variable for secret key in production

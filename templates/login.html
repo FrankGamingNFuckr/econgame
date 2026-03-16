@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - EconGame</title>
+    <title>EconGame - Login</title>
+    <link rel="icon" type="image/png" href="{{ favicon_url }}">
+    <link rel="stylesheet" href="/static/auth.css?v={{ static_asset_version }}">
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <style>
         * {
             margin: 0;
@@ -13,7 +16,7 @@
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--c-bg-start) 0%, var(--c-bg-end) 100%);
             min-height: 100vh;
             display: flex;
             justify-content: center;
@@ -22,23 +25,25 @@
         }
         
         .auth-container {
-            background: white;
+            background: var(--panel-bg);
             border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             padding: 40px;
             max-width: 450px;
             width: 100%;
+            border: 1px solid var(--panel-border);
+            color: var(--c-ink);
         }
         
         h1 {
             text-align: center;
-            color: #333;
+            color: rgba(var(--rgb-ink), 0.92);
             margin-bottom: 10px;
         }
         
         .subtitle {
             text-align: center;
-            color: #666;
+            color: rgba(var(--rgb-ink), 0.68);
             margin-bottom: 30px;
         }
         
@@ -49,28 +54,31 @@
         label {
             display: block;
             margin-bottom: 8px;
-            color: #333;
+            color: rgba(var(--rgb-ink), 0.88);
             font-weight: 600;
         }
         
         input {
             width: 100%;
             padding: 12px;
-            border: 2px solid #e0e0e0;
+            border: 1px solid rgba(var(--rgb-ink), 0.18);
             border-radius: 8px;
             font-size: 1em;
             transition: border-color 0.3s ease;
+            background: rgba(var(--rgb-silver), 0.65);
+            color: var(--c-ink);
         }
         
         input:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: rgba(var(--rgb-accent), 0.6);
+            box-shadow: var(--focus-shadow);
         }
         
         .btn {
             width: 100%;
             padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--grad-primary);
             color: white;
             border: none;
             border-radius: 8px;
@@ -94,11 +102,11 @@
         .link-text {
             text-align: center;
             margin-top: 20px;
-            color: #666;
+            color: rgba(var(--rgb-ink), 0.68);
         }
         
         .link-text a {
-            color: #667eea;
+            color: var(--c-purple);
             text-decoration: none;
             font-weight: 600;
         }
@@ -108,9 +116,9 @@
         }
         
         .error-message {
-            background: #fee;
-            border: 1px solid #fcc;
-            color: #c33;
+            background: rgba(var(--rgb-accent), 0.14);
+            border: 1px solid rgba(var(--rgb-accent), 0.45);
+            color: #9f1239;
             padding: 12px;
             border-radius: 8px;
             margin-bottom: 20px;
@@ -150,6 +158,21 @@
                 <input type="password" id="password" name="password" required>
             </div>
             
+            <div class="form-group" style="display: flex; align-items: center; margin-bottom: 10px;">
+                <input type="checkbox" id="remember_me" name="remember_me" style="width: auto; margin-right: 8px;">
+                <label for="remember_me" style="margin: 0; font-weight: normal;">Remember me for 30 days</label>
+            </div>
+            
+            <!-- Cloudflare Turnstile CAPTCHA -->
+            <div class="form-group">
+                <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}" data-theme="light"></div>
+                {% if turnstile_site_key == '1x00000000000000000000AA' %}
+                <p style="font-size: 0.85em; color: #666; margin-top: 5px;">
+                    ℹ️ Using demo key - Get your free Turnstile key at <a href="https://dash.cloudflare.com" target="_blank">Cloudflare Dashboard</a>
+                </p>
+                {% endif %}
+            </div>
+            
             <button type="submit" class="btn" id="loginBtn">Login</button>
         </form>
         
@@ -158,12 +181,6 @@
         </p>
         <p class="link-text">
             <a href="/forgot-password">Forgot your password?</a>
-        </p>
-        <p class="link-text">
-            <a href="#" id="resendVerificationLink">Resend verification email</a>
-        </p>
-        <p class="link-text" style="font-size: 0.85em; color: #555;">
-            Check your email for the verification link after registering.
         </p>
         <p class="link-text back-link">
             <a href="/">← Back to Home</a>
@@ -174,13 +191,13 @@
         const form = document.getElementById('loginForm');
         const messageDiv = document.getElementById('message');
         const loginBtn = document.getElementById('loginBtn');
-        const resendVerificationLink = document.getElementById('resendVerificationLink');
         
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
+            const remember_me = document.getElementById('remember_me').checked;
             
             loginBtn.disabled = true;
             loginBtn.textContent = 'Logging in...';
@@ -191,7 +208,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({ username, password, remember_me })
                 });
                 
                 const data = await response.json();
@@ -219,48 +236,6 @@
                 
                 loginBtn.disabled = false;
                 loginBtn.textContent = 'Login';
-            }
-        });
-
-        resendVerificationLink.addEventListener('click', async (e) => {
-            e.preventDefault();
-
-            const username = document.getElementById('username').value.trim();
-            if (!username) {
-                messageDiv.className = 'error-message';
-                messageDiv.textContent = 'Enter your username (or email) first, then click resend.';
-                messageDiv.style.display = 'block';
-                return;
-            }
-
-            try {
-                const response = await fetch('/resend-verification', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ identifier: username })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    messageDiv.className = 'success-message';
-                    if (data.verification_link) {
-                        messageDiv.innerHTML = `${data.message}<br><br><a href="${data.verification_link}" target="_blank" rel="noopener">Verify Email Now</a>`;
-                    } else {
-                        messageDiv.textContent = data.message;
-                    }
-                    messageDiv.style.display = 'block';
-                } else {
-                    messageDiv.className = 'error-message';
-                    messageDiv.textContent = data.error || 'Failed to resend verification email.';
-                    messageDiv.style.display = 'block';
-                }
-            } catch (error) {
-                messageDiv.className = 'error-message';
-                messageDiv.textContent = 'Connection error. Please try again.';
-                messageDiv.style.display = 'block';
             }
         });
     </script>

@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register - EconGame</title>
+    <title>EconGame - Register</title>
+    <link rel="icon" type="image/png" href="{{ favicon_url }}">
+    <link rel="stylesheet" href="/static/auth.css?v={{ static_asset_version }}">
     <style>
         * {
             margin: 0;
@@ -13,7 +15,7 @@
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--c-bg-start) 0%, var(--c-bg-end) 100%);
             min-height: 100vh;
             display: flex;
             justify-content: center;
@@ -22,23 +24,25 @@
         }
         
         .auth-container {
-            background: white;
+            background: var(--panel-bg);
             border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             padding: 40px;
             max-width: 450px;
             width: 100%;
+            border: 1px solid var(--panel-border);
+            color: var(--c-ink);
         }
         
         h1 {
             text-align: center;
-            color: #333;
+            color: rgba(var(--rgb-ink), 0.92);
             margin-bottom: 10px;
         }
         
         .subtitle {
             text-align: center;
-            color: #666;
+            color: rgba(var(--rgb-ink), 0.68);
             margin-bottom: 30px;
         }
         
@@ -49,28 +53,31 @@
         label {
             display: block;
             margin-bottom: 8px;
-            color: #333;
+            color: rgba(var(--rgb-ink), 0.88);
             font-weight: 600;
         }
         
         input {
             width: 100%;
             padding: 12px;
-            border: 2px solid #e0e0e0;
+            border: 1px solid rgba(var(--rgb-ink), 0.18);
             border-radius: 8px;
             font-size: 1em;
             transition: border-color 0.3s ease;
+            background: rgba(var(--rgb-silver), 0.65);
+            color: var(--c-ink);
         }
         
         input:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: rgba(var(--rgb-accent), 0.6);
+            box-shadow: var(--focus-shadow);
         }
         
         .btn {
             width: 100%;
             padding: 14px;
-            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            background: var(--grad-success);
             color: white;
             border: none;
             border-radius: 8px;
@@ -94,11 +101,11 @@
         .link-text {
             text-align: center;
             margin-top: 20px;
-            color: #666;
+            color: rgba(var(--rgb-ink), 0.68);
         }
         
         .link-text a {
-            color: #667eea;
+            color: var(--c-purple);
             text-decoration: none;
             font-weight: 600;
         }
@@ -108,9 +115,9 @@
         }
         
         .error-message {
-            background: #fee;
-            border: 1px solid #fcc;
-            color: #c33;
+            background: rgba(var(--rgb-accent), 0.14);
+            border: 1px solid rgba(var(--rgb-accent), 0.45);
+            color: #9f1239;
             padding: 12px;
             border-radius: 8px;
             margin-bottom: 20px;
@@ -118,9 +125,9 @@
         }
         
         .success-message {
-            background: #efe;
-            border: 1px solid #cfc;
-            color: #3c3;
+            background: rgba(var(--rgb-primary), 0.14);
+            border: 1px solid rgba(var(--rgb-primary), 0.35);
+            color: var(--c-pine);
             padding: 12px;
             border-radius: 8px;
             margin-bottom: 20px;
@@ -132,11 +139,12 @@
         }
         
         .requirements {
-            background: #f0f0f0;
+            background: rgba(var(--rgb-silver), 0.65);
             padding: 15px;
             border-radius: 8px;
             margin-bottom: 20px;
             font-size: 0.9em;
+            border: 1px solid rgba(var(--rgb-ink), 0.10);
         }
         
         .requirements ul {
@@ -162,11 +170,8 @@
             <ul>
                 <li>Username: At least 3 characters</li>
                 <li>Password: At least 6 characters</li>
-                <li>Valid email address</li>
+                <li>Valid email address (for password recovery)</li>
             </ul>
-            <p style="margin-top:10px; color:#555;">
-                Note: A verification email will be sent to your email address.
-            </p>
         </div>
         
         <form id="registerForm">
@@ -196,16 +201,12 @@
         <p class="link-text">
             Already have an account? <a href="/login">Login here</a>
         </p>
-        <p class="link-text">
-            <a href="#" id="resendVerificationLink">Resend verification email</a>
-        </p>
     </div>
     
     <script>
         const form = document.getElementById('registerForm');
         const messageDiv = document.getElementById('message');
         const registerBtn = document.getElementById('registerBtn');
-        const resendVerificationLink = document.getElementById('resendVerificationLink');
         
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -239,11 +240,7 @@
                 
                 if (response.ok) {
                     messageDiv.className = 'success-message';
-                    if (data.verification_link) {
-                        messageDiv.innerHTML = `${data.message}<br><br><a href="${data.verification_link}" target="_blank" rel="noopener">Verify Email Now</a><br><small>After verification, you can log in.</small>`;
-                    } else {
-                        messageDiv.textContent = data.message + ' Redirecting to login...';
-                    }
+                    messageDiv.textContent = data.message + ' Redirecting to login...';
                     messageDiv.style.display = 'block';
                     
                     setTimeout(() => {

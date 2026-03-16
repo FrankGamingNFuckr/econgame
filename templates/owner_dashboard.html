@@ -3,38 +3,198 @@
 <head>
   <meta charset="utf-8">
   <title>Owner Dashboard</title>
+  <link rel="icon" type="image/png" href="{{ favicon_url }}">
+  <link rel="stylesheet" href="/static/auth.css?v={{ static_asset_version }}">
   <style>
-    body { font-family: Segoe UI, Arial; background:#f6f8fb; padding:20px; }
+    body { font-family: Segoe UI, Arial; background: linear-gradient(135deg, var(--c-bg-start) 0%, var(--c-bg-end) 100%); padding:20px; color: var(--c-silver); }
+    h1 { margin: 0 0 14px 0; color: rgba(var(--rgb-silver), 0.95); }
+    h2, h3 { color: rgba(var(--rgb-ink), 0.92); }
+
+    .panel {
+      margin-bottom: 30px;
+      padding: 20px;
+      background: var(--panel-bg);
+      border-radius: 10px;
+      box-shadow: var(--panel-shadow);
+      border: 1px solid var(--panel-border);
+      color: var(--c-ink);
+    }
+
     table { width:100%; border-collapse:collapse; }
-    th,td { padding:8px; border:1px solid #ddd; text-align:left; }
-    button { padding:6px 10px; margin:0 4px; }
+    th,td { padding:8px; border:1px solid rgba(var(--rgb-ink), 0.14); text-align:left; }
+    th { background: rgba(var(--rgb-silver), 0.65); }
+    button { padding:6px 10px; margin:0 4px; border-radius: 8px; border: 1px solid rgba(var(--rgb-ink), 0.14); background: rgba(var(--rgb-silver), 0.72); color: var(--c-ink); cursor: pointer; }
+    button:hover { border-color: rgba(var(--rgb-accent), 0.35); }
     .modal {
       display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45);
       align-items:center; justify-content:center; z-index:9999;
     }
     .modal.open { display:flex; }
     .modal-card {
-      width:min(520px, 92vw); background:#fff; border-radius:10px; padding:16px;
-      box-shadow:0 10px 35px rgba(0,0,0,0.25); position:relative;
+      width:min(520px, 92vw); background: var(--panel-bg); border-radius:10px; padding:16px;
+      box-shadow: var(--panel-shadow); position:relative;
+      border: 1px solid var(--panel-border);
+      color: var(--c-ink);
     }
     .modal-close {
       position:absolute; right:10px; top:8px; border:none; background:transparent;
       font-size:24px; cursor:pointer; line-height:1;
     }
     .field { margin:12px 0; }
-    .field input { width:100%; padding:10px; border:1px solid #ccc; border-radius:8px; }
-    .error { color:#b42318; font-size:0.9em; min-height:20px; }
-    .hint { color:#555; font-size:0.9em; }
+    .field input { width:100%; padding:10px; border:1px solid rgba(var(--rgb-ink), 0.18); border-radius:8px; background: rgba(var(--rgb-silver), 0.65); color: var(--c-ink); }
+    .field input:focus { outline: none; border-color: rgba(var(--rgb-accent), 0.6); box-shadow: var(--focus-shadow); }
+    .error { color:#9f1239; font-size:0.9em; min-height:20px; }
+    .hint { color: rgba(var(--rgb-ink), 0.72); font-size:0.9em; }
+
+    /* Normalize department budget tiles into palette (overrides inline styles) */
+    #owner-dept-budgets > div {
+      background: var(--panel-bg-soft) !important;
+      border: 1px solid var(--panel-border-2) !important;
+      border-left: 5px solid var(--c-primary) !important;
+    }
+    #owner-dept-budgets > div:nth-child(2) { border-left-color: var(--c-purple) !important; }
+    #owner-dept-budgets > div:nth-child(3) { border-left-color: var(--c-accent) !important; }
+    #owner-dept-budgets > div:nth-child(4) { border-left-color: var(--c-pine) !important; }
+    #owner-dept-budgets > div:nth-child(5) { border-left-color: var(--c-primary) !important; }
+    #owner-dept-budgets > div:nth-child(6) { border-left-color: var(--c-accent) !important; }
+    #owner-dept-budgets > div:nth-child(7) { border-left-color: var(--c-purple) !important; }
+    #owner-dept-budgets h3 { color: rgba(var(--rgb-ink), 0.88) !important; }
+    #owner-dept-budgets div[id^="owner-dept-"] { color: rgba(var(--rgb-ink), 0.92) !important; }
   </style>
 </head>
 <body>
-  <h1>Owner Dashboard</h1>
-  <p>Manage admin keys (generate / toggle active). Assign to a valid username or leave blank for shared key.</p>
-  <div>
-    <button id="gen-key">Generate New Admin Key</button>
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
+    <h1 style="margin:0;">Owner Dashboard</h1>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <a href="/game" style="padding: 10px 14px; border-radius: 8px; text-decoration:none; background: rgba(var(--rgb-silver), 0.72); color: var(--c-ink); border: 1px solid rgba(var(--rgb-ink), 0.14); font-weight: 600;">
+        ← Back to Game
+      </a>
+      <a href="/logout" style="padding: 10px 14px; border-radius: 8px; text-decoration:none; background: rgba(var(--rgb-accent), 0.16); color: var(--c-ink); border: 1px solid rgba(var(--rgb-accent), 0.28); font-weight: 600;">
+        Logout
+      </a>
+    </div>
   </div>
-  <h3>Existing Keys</h3>
-  <div id="keys-container">Loading…</div>
+  
+  <!-- Economic Rates Management -->
+  <div class="panel">
+    <h2>💰 Economic Rate Management</h2>
+    <p>Adjust global economic rates for all players. Changes take effect immediately.</p>
+    
+    <div id="rates-container">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin: 20px 0;">
+        <div class="field">
+          <label>Standard Tax Rate (%)</label>
+          <input type="number" id="rate-tax" step="0.1" min="0" max="100" style="width: 100%;">
+          <div class="hint">Default: 10%</div>
+        </div>
+        <div class="field">
+          <label>High Income Tax Rate (%)</label>
+          <input type="number" id="rate-high-income" step="0.1" min="0" max="100" style="width: 100%;">
+          <div class="hint">Default: 25%</div>
+        </div>
+        <div class="field">
+          <label>Government Tax Percentage (%)</label>
+          <input type="number" id="rate-gov" step="1" min="0" max="100" style="width: 100%;">
+          <div class="hint">Default: 21%</div>
+        </div>
+        <div class="field">
+          <label>Inflation Rate (%)</label>
+          <input type="number" id="rate-inflation" step="0.1" min="-10" max="50" style="width: 100%;">
+          <div class="hint">Default: 2%</div>
+        </div>
+      </div>
+      <div id="rates-status" class="hint" style="margin: 10px 0;"></div>
+      <button onclick="updateRates()" style="padding: 10px 20px; background: linear-gradient(135deg, #0f766e 0%, #7c3aed 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+        💾 Save Economic Rates
+      </button>
+    </div>
+  </div>
+
+  <!-- Rate Change Requests from Moderators -->
+  <div class="panel">
+    <h2>📋 Moderator Rate Change Requests</h2>
+    <div id="rate-requests-container">Loading...</div>
+  </div>
+
+  <!-- Department Budgets -->
+  <div class="panel">
+    <h2>🏛️ Department Budgets (Lifetime Tax Collections)</h2>
+    <p>Tax revenue from government jobs is automatically distributed evenly across all departments.</p>
+    <div id="owner-dept-budgets" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-top: 20px;">
+      <div style="padding: 15px; background: linear-gradient(135deg, #e0f2fe 0%, #bfdbfe 100%); border-radius: 8px; border-left: 5px solid #3b82f6;">
+        <h3 style="margin: 0 0 8px 0; font-size: 1em; color: #1e40af;">🚗 Transportation</h3>
+        <div id="owner-dept-transportation" style="font-size: 1.5em; font-weight: bold; color: #3b82f6;">Loading...</div>
+      </div>
+      <div style="padding: 15px; background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%); border-radius: 8px; border-left: 5px solid #8b5cf6;">
+        <h3 style="margin: 0 0 8px 0; font-size: 1em; color: #6d28d9;">⚖️ Justice</h3>
+        <div id="owner-dept-justice" style="font-size: 1.5em; font-weight: bold; color: #8b5cf6;">Loading...</div>
+      </div>
+      <div style="padding: 15px; background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); border-radius: 8px; border-left: 5px solid #ef4444;">
+        <h3 style="margin: 0 0 8px 0; font-size: 1em; color: #991b1b;">🛡️ Defense</h3>
+        <div id="owner-dept-defense" style="font-size: 1.5em; font-weight: bold; color: #ef4444;">Loading...</div>
+      </div>
+      <div style="padding: 15px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 8px; border-left: 5px solid #f59e0b;">
+        <h3 style="margin: 0 0 8px 0; font-size: 1em; color: #92400e;">🏠 Homeland Security</h3>
+        <div id="owner-dept-homeland" style="font-size: 1.5em; font-weight: bold; color: #f59e0b;">Loading...</div>
+      </div>
+      <div style="padding: 15px; background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border-radius: 8px; border-left: 5px solid #10b981;">
+        <h3 style="margin: 0 0 8px 0; font-size: 1em; color: #065f46;">🏥 Health</h3>
+        <div id="owner-dept-health" style="font-size: 1.5em; font-weight: bold; color: #10b981;">Loading...</div>
+      </div>
+      <div style="padding: 15px; background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%); border-radius: 8px; border-left: 5px solid #ec4899;">
+        <h3 style="margin: 0 0 8px 0; font-size: 1em; color: #9f1239;">🏘️ Housing</h3>
+        <div id="owner-dept-housing" style="font-size: 1.5em; font-weight: bold; color: #ec4899;">Loading...</div>
+      </div>
+      <div style="padding: 15px; background: linear-gradient(135deg, #ccfbf1 0%, #99f6e4 100%); border-radius: 8px; border-left: 5px solid #14b8a6;">
+        <h3 style="margin: 0 0 8px 0; font-size: 1em; color: #134e4a;">🎓 Education</h3>
+        <div id="owner-dept-education" style="font-size: 1.5em; font-weight: bold; color: #14b8a6;">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hourly Processing Log (Owner-only debug) -->
+  <div class="panel">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h2 style="margin-bottom:6px;">⏱️ Hourly Processing Log</h2>
+        <p style="margin:0; color:#555;">Shows when hourly updates run automatically vs manually.</p>
+      </div>
+      <button onclick="loadHourlyLog()" style="padding: 10px 16px; background: linear-gradient(135deg, #0f766e 0%, #7c3aed 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 700;">
+        🔄 Refresh
+      </button>
+    </div>
+    <div id="hourly-log-container" style="margin-top:14px;">Loading...</div>
+  </div>
+
+  <!-- Error Logs (Owner-only debug) -->
+  <div class="panel">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h2 style="margin-bottom:6px;">🐛 Error Logs</h2>
+        <p style="margin:0; color:#555;">JavaScript errors automatically reported by users. Helps catch bugs in production.</p>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button onclick="loadErrorLogs()" style="padding: 10px 16px; background: linear-gradient(135deg, #0f766e 0%, #7c3aed 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 700;">
+          🔄 Refresh
+        </button>
+        <button onclick="clearErrorLogs()" style="padding: 10px 16px; background: linear-gradient(135deg, #dc2626 0%, #9f1239 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 700;">
+          🗑️ Clear All
+        </button>
+      </div>
+    </div>
+    <div id="error-logs-container" style="margin-top:14px;">Loading...</div>
+  </div>
+
+  <!-- Admin Keys Management -->
+  <div class="panel">
+    <h2>🔑 Admin Key Management</h2>
+    <p>Manage admin keys (generate / toggle active). Assign to a valid username or leave blank for shared key.</p>
+    <div>
+      <button id="gen-key">Generate New Admin Key</button>
+    </div>
+    <h3>Existing Keys</h3>
+    <div id="keys-container">Loading…</div>
+  </div>
 
   <div id="assign-modal" class="modal" aria-hidden="true">
     <div class="modal-card">
@@ -161,6 +321,311 @@ async function loadKeys(){
   }));
 }
 
+// Economic Rates Management
+async function loadRates() {
+  try {
+    const res = await fetch('/api/owner/economic-rates');
+    const data = await res.json();
+    if (data.rates) {
+      document.getElementById('rate-tax').value = (data.rates.taxRate * 100).toFixed(1);
+      document.getElementById('rate-high-income').value = (data.rates.highIncomeRate * 100).toFixed(1);
+      document.getElementById('rate-gov').value = data.rates.govTaxPercent;
+      document.getElementById('rate-inflation').value = (data.rates.inflation * 100).toFixed(1);
+      document.getElementById('rates-status').textContent = 'Rates loaded successfully';
+    }
+  } catch (error) {
+    document.getElementById('rates-status').textContent = 'Error loading rates: ' + error.message;
+  }
+}
+
+async function updateRates() {
+  const taxRate = parseFloat(document.getElementById('rate-tax').value) / 100;
+  const highIncomeRate = parseFloat(document.getElementById('rate-high-income').value) / 100;
+  const govTaxPercent = parseInt(document.getElementById('rate-gov').value);
+  const inflation = parseFloat(document.getElementById('rate-inflation').value) / 100;
+
+  if (isNaN(taxRate) || isNaN(highIncomeRate) || isNaN(govTaxPercent) || isNaN(inflation)) {
+    alert('Please enter valid numbers for all rates');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/owner/update-economic-rates', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ taxRate, highIncomeRate, govTaxPercent, inflation })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      document.getElementById('rates-status').textContent = '✅ Rates updated successfully!';
+      document.getElementById('rates-status').style.color = '#16a34a';
+      setTimeout(() => {
+        document.getElementById('rates-status').textContent = '';
+        document.getElementById('rates-status').style.color = '';
+      }, 3000);
+    } else {
+      alert('Error: ' + (data.error || 'Failed to update rates'));
+    }
+  } catch (error) {
+    alert('Error updating rates: ' + error.message);
+  }
+}
+
+async function loadRateRequests() {
+  try {
+    const res = await fetch('/api/owner/rate-change-requests');
+    const data = await res.json();
+    
+    if (!data.requests || data.requests.length === 0) {
+      document.getElementById('rate-requests-container').innerHTML = '<p>No pending rate change requests.</p>';
+      return;
+    }
+
+    const html = data.requests.map(req => `
+      <div style="padding: 15px; margin: 10px 0; background: #f9fafb; border-left: 4px solid #0f766e; border-radius: 6px;">
+        <div style="font-weight: 600; margin-bottom: 8px;">
+          📨 From: <span style="color: #7c3aed;">${req.from_moderator}</span>
+          <span style="float: right; font-size: 0.9em; color: #666;">${new Date(req.timestamp).toLocaleString()}</span>
+        </div>
+        <div style="margin: 8px 0;">
+          <strong>Requested Changes:</strong>
+          <ul style="margin: 5px 0; padding-left: 20px;">
+            ${req.changes.taxRate !== undefined ? `<li>Standard Tax Rate: ${(req.changes.taxRate * 100).toFixed(1)}%</li>` : ''}
+            ${req.changes.highIncomeRate !== undefined ? `<li>High Income Tax Rate: ${(req.changes.highIncomeRate * 100).toFixed(1)}%</li>` : ''}
+            ${req.changes.govTaxPercent !== undefined ? `<li>Government Tax Percentage: ${req.changes.govTaxPercent}%</li>` : ''}
+            ${req.changes.inflation !== undefined ? `<li>Inflation Rate: ${(req.changes.inflation * 100).toFixed(1)}%</li>` : ''}
+          </ul>
+        </div>
+        ${req.reason ? `<div style="margin: 8px 0;"><strong>Reason:</strong> ${req.reason}</div>` : ''}
+        <div style="margin-top: 10px;">
+          <button onclick="approveRateRequest('${req.id}')" style="padding: 6px 12px; background: #16a34a; color: white; border: none; border-radius: 5px; cursor: pointer; margin-right: 8px;">
+            ✅ Approve & Apply
+          </button>
+          <button onclick="dismissRateRequest('${req.id}')" style="padding: 6px 12px; background: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            ❌ Dismiss
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    document.getElementById('rate-requests-container').innerHTML = html;
+  } catch (error) {
+    document.getElementById('rate-requests-container').innerHTML = '<p style="color: #dc2626;">Error loading requests</p>';
+  }
+}
+
+async function approveRateRequest(requestId) {
+  try {
+    const res = await fetch('/api/owner/approve-rate-request', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ requestId })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alert('✅ Rate changes applied successfully!');
+      loadRateRequests();
+      loadRates();
+    } else {
+      alert('Error: ' + (data.error || 'Failed to approve request'));
+    }
+  } catch (error) {
+    alert('Error: ' + error.message);
+  }
+}
+
+async function dismissRateRequest(requestId) {
+  try {
+    const res = await fetch('/api/owner/dismiss-rate-request', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ requestId })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alert('Request dismissed');
+      loadRateRequests();
+    } else {
+      alert('Error: ' + (data.error || 'Failed to dismiss request'));
+    }
+  } catch (error) {
+    alert('Error: ' + error.message);
+  }
+}
+
+async function loadDepartmentBudgets() {
+  try {
+    const res = await fetch('/api/owner/economic-rates');
+    const data = await res.json();
+    
+    if (data.rates) {
+      // Also load the full config to get department budgets
+      const configRes = await fetch('/api/config');
+      const config = await configRes.json();
+      
+      const budgets = config.departmentBudgets || {
+        transportation: 0,
+        justice: 0,
+        defense: 0,
+        homeland: 0,
+        health: 0,
+        housing: 0,
+        education: 0
+      };
+      
+      document.getElementById('owner-dept-transportation').textContent = '$' + Math.floor(budgets.transportation).toLocaleString();
+      document.getElementById('owner-dept-justice').textContent = '$' + Math.floor(budgets.justice).toLocaleString();
+      document.getElementById('owner-dept-defense').textContent = '$' + Math.floor(budgets.defense).toLocaleString();
+      document.getElementById('owner-dept-homeland').textContent = '$' + Math.floor(budgets.homeland).toLocaleString();
+      document.getElementById('owner-dept-health').textContent = '$' + Math.floor(budgets.health).toLocaleString();
+      document.getElementById('owner-dept-housing').textContent = '$' + Math.floor(budgets.housing).toLocaleString();
+      document.getElementById('owner-dept-education').textContent = '$' + Math.floor(budgets.education).toLocaleString();
+    }
+  } catch (error) {
+    console.error('Error loading department budgets:', error);
+  }
+}
+
+async function loadHourlyLog() {
+  const container = document.getElementById('hourly-log-container');
+  if (!container) return;
+  container.textContent = 'Loading...';
+
+  try {
+    const res = await fetch('/api/owner/hourly-log?limit=60');
+    const data = await res.json();
+    if (!res.ok) {
+      container.innerHTML = `<div style="color:#dc2626;">${data.error || 'Failed to load hourly log.'}</div>`;
+      return;
+    }
+
+    const entries = Array.isArray(data.entries) ? data.entries : [];
+    if (entries.length === 0) {
+      container.innerHTML = '<p style="color:#555;">No hourly processing events logged yet.</p>';
+      return;
+    }
+
+    const rows = entries.map(e => {
+      const when = e.timestamp ? new Date(e.timestamp).toLocaleString() : '';
+      const source = (e.source || 'auto') === 'manual' ? 'Manual' : 'Auto';
+      const ok = e.ok !== false;
+      const status = ok
+        ? '<span style="color:#16a34a; font-weight:700;">OK</span>'
+        : '<span style="color:#dc2626; font-weight:700;">ERROR</span>';
+      const duration = (typeof e.duration_ms === 'number') ? `${e.duration_ms}ms` : '';
+      const notes = `Stocks: ${e.stocks_updated ?? 0}, Crypto: ${e.crypto_updated ?? 0}, Users: ${e.users_processed ?? 0}`;
+      const err = e.error ? `<div style="color:#991b1b; font-size:0.9em; margin-top:4px;">${e.error}</div>` : '';
+
+      return `<tr>
+        <td>${when}</td>
+        <td>${source}</td>
+        <td>${status}</td>
+        <td>${duration}</td>
+        <td>${notes}${err}</td>
+      </tr>`;
+    }).join('');
+
+    container.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Source</th>
+            <th>Status</th>
+            <th>Duration</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="margin-top:10px; color:#555; font-size:0.9em;">Showing the most recent ${entries.length} events.</div>
+    `;
+  } catch (error) {
+    container.innerHTML = `<div style="color:#dc2626;">Error loading hourly log: ${error.message}</div>`;
+  }
+}
+
+async function loadErrorLogs() {
+  const container = document.getElementById('error-logs-container');
+  if (!container) return;
+  container.textContent = 'Loading...';
+
+  try {
+    const res = await fetch('/api/owner/errors?limit=100');
+    const data = await res.json();
+    if (!res.ok) {
+      container.innerHTML = `<div style="color:#dc2626;">${data.error || 'Failed to load error logs.'}</div>`;
+      return;
+    }
+
+    const errors = Array.isArray(data.errors) ? data.errors : [];
+    if (errors.length === 0) {
+      container.innerHTML = '<p style="color:#16a34a; font-weight:600;">✅ No errors logged! Everything is working smoothly.</p>';
+      return;
+    }
+
+    const rows = errors.map(e => {
+      const when = e.timestamp ? new Date(e.timestamp).toLocaleString() : '';
+      const user = e.username || 'anonymous';
+      const playerId = e.playerId || 'N/A';
+      const message = e.message || 'Unknown error';
+      const url = e.url || '';
+      const location = e.line && e.column ? `Line ${e.line}, Col ${e.column}` : '';
+      const stack = e.stack ? `<details style="margin-top:6px; font-size:0.85em; color:#7f1d1d;"><summary style="cursor:pointer; font-weight:600;">Stack Trace</summary><pre style="overflow-x:auto; background:#fee; padding:8px; margin-top:4px; border-radius:4px;">${e.stack}</pre></details>` : '';
+      
+      return `<tr>
+        <td style="white-space:nowrap;">${when}</td>
+        <td>${user}<br/><span style="font-size:0.85em; color:#666;">ID: ${playerId}</span></td>
+        <td style="max-width:300px;"><strong>${message}</strong><br/>
+          ${url ? `<span style="font-size:0.85em; color:#666;">URL: ${url}</span><br/>` : ''}
+          ${location ? `<span style="font-size:0.85em; color:#666;">${location}</span>` : ''}
+          ${stack}
+        </td>
+      </tr>`;
+    }).join('');
+
+    container.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>User</th>
+            <th>Error Details</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="margin-top:10px; color:#555; font-size:0.9em;">Showing the most recent ${errors.length} errors (max 100).</div>
+    `;
+  } catch (error) {
+    container.innerHTML = `<div style="color:#dc2626;">Error loading error logs: ${error.message}</div>`;
+  }
+}
+
+async function clearErrorLogs() {
+  if (!confirm('Are you sure you want to clear ALL error logs? This cannot be undone.')) {
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/owner/clear_errors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const data = await res.json();
+    if (!res.ok) {
+      alert('Failed to clear error logs: ' + (data.error || 'Unknown error'));
+      return;
+    }
+
+    alert('✅ All error logs cleared successfully!');
+    loadErrorLogs(); // Reload to show empty state
+  } catch (error) {
+    alert('Error clearing logs: ' + error.message);
+  }
+}
+
 document.getElementById('gen-key').addEventListener('click', ()=> openAssignModal('generate', null, ''));
 document.getElementById('assign-username').addEventListener('input', (e)=> loadUsernameSuggestions(e.target.value));
 document.getElementById('assign-save').addEventListener('click', submitAssignModal);
@@ -170,7 +635,13 @@ document.getElementById('assign-modal').addEventListener('click', (e)=>{
   if (e.target.id === 'assign-modal') closeAssignModal();
 });
 
+// Initialize all data
 loadKeys();
+loadRates();
+loadRateRequests();
+loadDepartmentBudgets();
+loadHourlyLog();
+loadErrorLogs();
 </script>
 </body>
 </html>

@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Moderator Login - EconGame</title>
+    <link rel="icon" type="image/png" href="{{ favicon_url }}">
+    <link rel="stylesheet" href="/static/auth.css?v={{ static_asset_version }}">
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <style>
         * {
             margin: 0;
@@ -13,7 +16,7 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            background: linear-gradient(135deg, var(--c-bg-start) 0%, var(--c-bg-end) 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -21,12 +24,14 @@
         }
 
         .container {
-            background: white;
+            background: var(--panel-bg);
             padding: 40px;
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
             width: 90%;
             max-width: 450px;
+            border: 1px solid var(--panel-border);
+            color: var(--c-ink);
         }
 
         .header {
@@ -40,13 +45,13 @@
         }
 
         h1 {
-            color: #f5576c;
+            color: var(--c-accent);
             font-size: 2rem;
             margin-bottom: 10px;
         }
 
         .subtitle {
-            color: #666;
+            color: rgba(var(--rgb-ink), 0.68);
             font-size: 0.95rem;
         }
 
@@ -56,7 +61,7 @@
 
         label {
             display: block;
-            color: #333;
+            color: rgba(var(--rgb-ink), 0.88);
             margin-bottom: 8px;
             font-weight: 600;
         }
@@ -65,21 +70,24 @@
         input[type="password"] {
             width: 100%;
             padding: 12px 15px;
-            border: 2px solid #ddd;
+            border: 1px solid rgba(var(--rgb-ink), 0.18);
             border-radius: 8px;
             font-size: 1rem;
             transition: border-color 0.3s;
+            background: rgba(var(--rgb-silver), 0.65);
+            color: var(--c-ink);
         }
 
         input:focus {
             outline: none;
-            border-color: #f5576c;
+            border-color: rgba(var(--rgb-accent), 0.6);
+            box-shadow: var(--focus-shadow);
         }
 
         .btn {
             width: 100%;
             padding: 14px;
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            background: var(--grad-accent);
             color: white;
             border: none;
             border-radius: 8px;
@@ -107,15 +115,15 @@
         }
 
         .message.error {
-            background: #fee;
-            color: #c33;
-            border: 1px solid #fcc;
+            background: rgba(var(--rgb-accent), 0.14);
+            color: #9f1239;
+            border: 1px solid rgba(var(--rgb-accent), 0.45);
         }
 
         .message.success {
-            background: #efe;
-            color: #3c3;
-            border: 1px solid #cfc;
+            background: rgba(var(--rgb-primary), 0.14);
+            color: var(--c-pine);
+            border: 1px solid rgba(var(--rgb-primary), 0.35);
         }
 
         .back-link {
@@ -124,7 +132,7 @@
         }
 
         .back-link a {
-            color: #f5576c;
+            color: var(--c-purple);
             text-decoration: none;
             font-weight: 600;
         }
@@ -134,20 +142,20 @@
         }
 
         .info-box {
-            background: rgba(245, 87, 108, 0.1);
-            border: 2px solid rgba(245, 87, 108, 0.3);
+            background: rgba(var(--rgb-accent), 0.10);
+            border: 1px solid rgba(var(--rgb-accent), 0.28);
             border-radius: 8px;
             padding: 15px;
             margin-bottom: 20px;
-            color: #333;
+            color: rgba(var(--rgb-ink), 0.88);
         }
 
         .info-box strong {
-            color: #f5576c;
+            color: var(--c-accent);
         }
 
         .info-box code {
-            background: rgba(0,0,0,0.05);
+            background: rgba(var(--rgb-silver), 0.65);
             padding: 2px 6px;
             border-radius: 4px;
             font-family: monospace;
@@ -180,6 +188,21 @@
                 <input type="password" id="adminKey" name="adminKey" required placeholder="Enter your admin key">
             </div>
 
+            <div class="form-group" style="display: flex; align-items: center; margin-bottom: 10px;">
+                <input type="checkbox" id="remember_me" name="remember_me" style="width: auto; margin-right: 8px;">
+                <label for="remember_me" style="margin: 0; font-weight: normal;">Remember me for 30 days</label>
+            </div>
+
+            <!-- Cloudflare Turnstile CAPTCHA -->
+            <div class="form-group">
+                <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}" data-theme="light"></div>
+                {% if turnstile_site_key == '1x00000000000000000000AA' %}
+                <p style="font-size: 0.85em; color: #666; margin-top: 5px;">
+                    ℹ️ Using demo key - Get your free Turnstile key at <a href="https://dash.cloudflare.com" target="_blank">Cloudflare Dashboard</a>
+                </p>
+                {% endif %}
+            </div>
+
             <button type="submit" class="btn">🔓 Login as Moderator</button>
         </form>
 
@@ -194,6 +217,7 @@
             
             const username = document.getElementById('username').value.trim() || 'Moderator';
             const adminKey = document.getElementById('adminKey').value.trim();
+            const remember_me = document.getElementById('remember_me').checked;
             
             const messageDiv = document.getElementById('message');
             
@@ -203,7 +227,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ username, admin_key: adminKey })
+                    body: JSON.stringify({ username, admin_key: adminKey, remember_me })
                 });
                 
                 const data = await response.json();
