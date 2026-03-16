@@ -316,7 +316,7 @@ class GameTester:
                 time.sleep(0.1)
             
             r = self.session.post(f"{BASE_URL}/api/buy_stock", json={
-                'ticker': 'TECH',
+                'ticker': 'APEX',
                 'shares': 1
             })
             if r.status_code == 200:

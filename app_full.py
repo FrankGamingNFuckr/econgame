@@ -873,19 +873,44 @@ ERROR_LOGS_FILE = DATA_DIR / 'error_logs.json'
 # ==================== DATA LOADING/SAVING ====================
 
 def load_json(file, default):
-    if file.exists():
-        try:
-            with open(file, 'r') as f:
-                return json.load(f)
-        except:
-            return default
-    return default
+    if not file.exists():
+        return default
+
+    try:
+        with open(file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        backup_file = file.with_suffix(file.suffix + '.bak')
+        if backup_file.exists():
+            try:
+                with open(backup_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                print(f"[WARN] Failed to read {file}, recovered from backup {backup_file}: {e}")
+                return data
+            except Exception as backup_error:
+                print(f"[WARN] Failed to read both {file} and backup {backup_file}: {backup_error}")
+        else:
+            print(f"[WARN] Failed to read JSON from {file}: {e}")
+        return default
 
 def save_json(file, data):
     # Ensure parent directory exists
     file.parent.mkdir(parents=True, exist_ok=True)
-    with open(file, 'w') as f:
+    temp_file = file.with_suffix(file.suffix + '.tmp')
+    backup_file = file.with_suffix(file.suffix + '.bak')
+
+    with open(temp_file, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+
+    if file.exists():
+        try:
+            os.replace(file, backup_file)
+        except Exception as e:
+            print(f"[WARN] Could not update backup for {file}: {e}")
+
+    os.replace(temp_file, file)
 
 def load_users():
     return load_json(USERS_FILE, {})
@@ -1794,7 +1819,12 @@ def create_account():
     account_type = data.get('type')
     user_id = session.get('player_id')
     
+    if not user_id:
+        return jsonify({'error': 'Not logged in'}), 401
+
     users = load_users()
+    if user_id not in users:
+        return jsonify({'error': 'User not found'}), 404
     user = users[user_id]
     
     if account_type not in ['checking', 'savings']:
@@ -1802,9 +1832,9 @@ def create_account():
     
     # Check if trying to create an account they already have
     if account_type == 'checking' and user.get('hasCheckingAccount', False):
-        return jsonify({'error': 'You already have a checking account!'}), 400
+        return jsonify({'success': False, 'error': 'You already have a checking account!'})
     if account_type == 'savings' and user.get('hasSavingsAccount', False):
-        return jsonify({'error': 'You already have a savings account!'}), 400
+        return jsonify({'success': False, 'error': 'You already have a savings account!'})
     
     # Mark that they've created at least one account
     user['createdAccount'] = True
@@ -1857,37 +1887,42 @@ def deposit():
     try:
         data = request.json
         if not data:
-            return jsonify({'error': 'No data provided'}), 400
+            return jsonify({'success': False, 'error': 'No data provided'})
             
         amount = int(data.get('amount', 0))
-        target = data.get('target')
+        target = data.get('target') or data.get('account')
+        target = (str(target).strip().lower() if target is not None else None)
         user_id = session.get('player_id')
         
         if not user_id:
-            return jsonify({'error': 'Not logged in'}), 400
+            return jsonify({'success': False, 'error': 'Not logged in'})
         
         users = load_users()
         if user_id not in users:
-            return jsonify({'error': 'User not found'}), 400
+            return jsonify({'success': False, 'error': 'User not found'})
             
         user = users[user_id]
     except Exception as e:
-        return jsonify({'error': f'Request error: {str(e)}'}), 400
+        return jsonify({'success': False, 'error': f'Request error: {str(e)}'})
     
     if amount <= 0:
-        return jsonify({'error': 'Invalid amount'}), 400
+        return jsonify({'success': False, 'error': 'Invalid amount'})
     
     if user['pockets'] < amount:
-        return jsonify({'error': 'Not enough in pockets'}), 400
+        return jsonify({
+            'success': False,
+            'error': f"Not enough in pockets. You have ${user.get('pockets', 0):,}.",
+            'current_pockets': user.get('pockets', 0)
+        })
     
     if target == 'checking':
         if not user.get('hasCheckingAccount', False):
-            return jsonify({'error': 'Create a checking account first'}), 400
+            return jsonify({'success': False, 'error': 'Create a checking account first'})
         user['checking'] += amount
         user['pockets'] -= amount
     elif target == 'savings':
         if not user.get('hasSavingsAccount', False):
-            return jsonify({'error': 'Create a savings account first'}), 400
+            return jsonify({'success': False, 'error': 'Create a savings account first'})
         user['savings'] += amount
         user['pockets'] -= amount
     elif target == 'emergency':
@@ -1896,13 +1931,13 @@ def deposit():
         current = user.get('emergency', 0)
         space = max(0, cap - current)
         if space <= 0:
-            return jsonify({'error': 'Emergency fund is full!'}), 400
+            return jsonify({'success': False, 'error': 'Emergency fund is full!'})
         to_add = min(space, amount)
         user['emergency'] += to_add
         user['pockets'] -= to_add
         amount = to_add
     else:
-        return jsonify({'error': 'Invalid target'}), 400
+        return jsonify({'success': False, 'error': 'Invalid target'})
     
     save_users(users)
     return jsonify({'success': True, 'amount': amount})
@@ -1910,37 +1945,46 @@ def deposit():
 @bp.route('/api/withdraw', methods=['POST'])
 def withdraw():
     data = request.json
+    if not data:
+        return jsonify({'success': False, 'error': 'No data provided'})
+
     amount = int(data.get('amount', 0))
-    source = data.get('source')
+    source = data.get('source') or data.get('account')
+    source = (str(source).strip().lower() if source is not None else None)
     user_id = session.get('player_id')
-    
+
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+
     users = load_users()
+    if user_id not in users:
+        return jsonify({'success': False, 'error': 'User not found'})
     user = users[user_id]
     
     if amount <= 0:
-        return jsonify({'error': 'Invalid amount'}), 400
+        return jsonify({'success': False, 'error': 'Invalid amount'})
     
     if source == 'checking':
         if not user.get('hasCheckingAccount', False):
-            return jsonify({'error': 'Create a checking account first'}), 400
+            return jsonify({'success': False, 'error': 'Create a checking account first'})
         if user['checking'] < amount:
-            return jsonify({'error': 'Not enough in checking'}), 400
+            return jsonify({'success': False, 'error': f"Not enough in checking. You have ${user.get('checking', 0):,}."})
         user['checking'] -= amount
         user['pockets'] += amount
     elif source == 'savings':
         if not user.get('hasSavingsAccount', False):
-            return jsonify({'error': 'Create a savings account first'}), 400
+            return jsonify({'success': False, 'error': 'Create a savings account first'})
         if user['savings'] < amount:
-            return jsonify({'error': 'Not enough in savings'}), 400
+            return jsonify({'success': False, 'error': f"Not enough in savings. You have ${user.get('savings', 0):,}."})
         user['savings'] -= amount
         user['pockets'] += amount
     elif source == 'emergency':
         if user['emergency'] < amount:
-            return jsonify({'error': 'Not enough in emergency fund'}), 400
+            return jsonify({'success': False, 'error': f"Not enough in emergency fund. You have ${user.get('emergency', 0):,}."})
         user['emergency'] -= amount
         user['pockets'] += amount
     else:
-        return jsonify({'error': 'Invalid source'}), 400
+        return jsonify({'success': False, 'error': 'Invalid source'})
     
     save_users(users)
     return jsonify({'success': True})
@@ -1950,19 +1994,23 @@ def withdraw():
 @bp.route('/api/work', methods=['POST'])
 def work():
     user_id = session.get('player_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'})
     
     if is_jailed(user_id):
-        return jsonify({'error': 'You are in jail!'}), 400
+        return jsonify({'success': False, 'error': 'You are in jail!'})
     
     remaining = get_cooldown_remaining(user_id, 'work', 10000)  # 10 second cooldown
     if remaining > 0:
-        return jsonify({'error': f'Cooldown: {format_cooldown(remaining)}'}), 400
+        return jsonify({'success': False, 'error': f'Cooldown: {format_cooldown(remaining)}'})
     
     set_cooldown(user_id, 'work')
     
     amount = random.randint(50, 200)
     
     users = load_users()
+    if user_id not in users:
+        return jsonify({'success': False, 'error': 'User not found'})
     user = users[user_id]
     ensure_runtime_fields(user)
     advisor = get_advisor(user)
@@ -2003,11 +2051,11 @@ def workgov():
     user_id = session.get('player_id')
     
     if is_jailed(user_id):
-        return jsonify({'error': 'You are in jail!'}), 400
+        return jsonify({'success': False, 'error': 'You are in jail!'})
     
     remaining = get_cooldown_remaining(user_id, 'workgov', 120000)  # 2 minute cooldown
     if remaining > 0:
-        return jsonify({'error': f'Cooldown: {format_cooldown(remaining)}'}), 400
+        return jsonify({'success': False, 'error': f'Cooldown: {format_cooldown(remaining)}'})
     
     config = load_config()
     
@@ -2638,7 +2686,7 @@ def create_business():
         cost = int(cost * 1.2)
     
     if not has_sufficient_funds(user, cost):
-        return jsonify({'error': f'Need ${cost:,} to create a business. You don\'t have enough money.'}), 400
+        return jsonify({'success': False, 'error': f'Need ${cost:,} to create a business. You don\'t have enough money.'})
     
     businesses = load_businesses()
     business_id = secrets.token_hex(8)
@@ -2803,14 +2851,18 @@ def run_illegal_business():
     data = request.json or {}
     business_id = data.get('business_id')
     user_id = session.get('player_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'})
     users = load_users()
+    if user_id not in users:
+        return jsonify({'success': False, 'error': 'User not found'})
     user = users[user_id]
     ensure_runtime_fields(user)
     user['id_for_runtime'] = user_id
 
     if is_jailed(user_id):
         del user['id_for_runtime']
-        return jsonify({'error': 'You are in jail!'}), 400
+        return jsonify({'success': False, 'error': 'You are in jail!'})
 
     illegal_business = None
     for entry in user.get('illegalBusinesses', []):
@@ -2831,7 +2883,7 @@ def run_illegal_business():
             remaining = cooldown_ms - int((datetime.now() - last_run).total_seconds() * 1000)
             if remaining > 0:
                 del user['id_for_runtime']
-                return jsonify({'error': f'Cooldown: {format_cooldown(remaining)}'}), 400
+                return jsonify({'success': False, 'error': f'Cooldown: {format_cooldown(remaining)}'})
         except Exception:
             pass
 
@@ -3393,21 +3445,30 @@ def get_stocks():
 @bp.route('/api/buy_stock', methods=['POST'])
 def buy_stock():
     data = request.json
-    symbol = data.get('symbol')
-    quantity = int(data.get('quantity', 0))
+    if not data:
+        return jsonify({'success': False, 'error': 'No data provided'})
+
+    symbol = data.get('symbol') or data.get('ticker')
+    symbol = (str(symbol).strip().upper() if symbol is not None else None)
+    quantity = int(data.get('quantity', data.get('shares', 0)))
     user_id = session.get('player_id')
-    
+
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+
     if quantity <= 0:
-        return jsonify({'error': 'Invalid quantity'}), 400
+        return jsonify({'success': False, 'error': 'Invalid quantity'})
     
     stocks = load_stocks()
     if symbol not in stocks:
-        return jsonify({'error': 'Stock not found'}), 404
+        return jsonify({'success': False, 'error': 'Stock not found'})
     
     stock_price = stocks[symbol]['price']
     total_cost = stock_price * quantity
-    
+
     users = load_users()
+    if user_id not in users:
+        return jsonify({'success': False, 'error': 'User not found'})
     user = users[user_id]
     ensure_runtime_fields(user)
     advisor = get_advisor(user)
@@ -3418,7 +3479,7 @@ def buy_stock():
         total_cost = int(total_cost * 1.2)
     
     if not has_sufficient_funds(user, total_cost):
-        return jsonify({'error': f'Need ${total_cost:,}. You don\'t have enough money.'}), 400
+        return jsonify({'success': False, 'error': f'Need ${total_cost:,}. You don\'t have enough money.'})
     
     deduct_funds(user, total_cost)
     
@@ -3433,24 +3494,32 @@ def buy_stock():
 @bp.route('/api/sell_stock', methods=['POST'])
 def sell_stock():
     data = request.json
+    if not data:
+        return jsonify({'success': False, 'error': 'No data provided'})
+
     symbol = data.get('symbol')
     quantity = int(data.get('quantity', 0))
     user_id = session.get('player_id')
-    
+
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+
     if quantity <= 0:
-        return jsonify({'error': 'Invalid quantity'}), 400
+        return jsonify({'success': False, 'error': 'Invalid quantity'})
     
     users = load_users()
+    if user_id not in users:
+        return jsonify({'success': False, 'error': 'User not found'})
     user = users[user_id]
     ensure_runtime_fields(user)
     
     owned = user.get('stocks', {}).get(symbol, 0)
     if owned < quantity:
-        return jsonify({'error': f'You only own {owned} shares'}), 400
+        return jsonify({'success': False, 'error': f'You only own {owned} shares'})
     
     stocks = load_stocks()
     if symbol not in stocks:
-        return jsonify({'error': 'Stock not found'}), 404
+        return jsonify({'success': False, 'error': 'Stock not found'})
     
     stock_price = stocks[symbol]['price']
     total_revenue = stock_price * quantity
@@ -3950,14 +4019,14 @@ def rob_user(target_id):
     user_id = session.get('player_id')
     
     if user_id == target_id:
-        return jsonify({'error': 'Cannot rob yourself!'}), 400
+        return jsonify({'success': False, 'error': 'Cannot rob yourself!'})
     
     if is_jailed(user_id):
-        return jsonify({'error': 'You are in jail!'}), 400
+        return jsonify({'success': False, 'error': 'You are in jail!'})
     
     remaining = get_cooldown_remaining(user_id, 'rob', 300000)  # 5 minute cooldown
     if remaining > 0:
-        return jsonify({'error': f'Cooldown: {format_cooldown(remaining)}'}), 400
+        return jsonify({'success': False, 'error': f'Cooldown: {format_cooldown(remaining)}'})
     
     users = load_users()
     
@@ -4048,17 +4117,21 @@ def rob_user(target_id):
 @bp.route('/api/buy_insurance', methods=['POST'])
 def buy_insurance():
     user_id = session.get('player_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'})
     
     cost = 10000
     
     users = load_users()
+    if user_id not in users:
+        return jsonify({'success': False, 'error': 'User not found'})
     user = users[user_id]
     
     if user.get('hasInsurance', False):
-        return jsonify({'error': 'You already have insurance!'}), 400
+        return jsonify({'success': False, 'error': 'You already have insurance!'})
     
     if not has_sufficient_funds(user, cost):
-        return jsonify({'error': f'Insurance costs ${cost:,}. You don\'t have enough money.'}), 400
+        return jsonify({'success': False, 'error': f'Insurance costs ${cost:,}. You don\'t have enough money.'})
     
     deduct_funds(user, cost)
     user['hasInsurance'] = True
@@ -4142,6 +4215,22 @@ def clear_owner_errors():
     
     save_error_logs([])
     return jsonify({'success': True, 'message': 'All error logs cleared'})
+
+@bp.route('/api/owner/backup')
+def owner_backup():
+    """Owner endpoint to download a snapshot of core game data as JSON."""
+    if not session.get('is_owner'):
+        return jsonify({'error': 'Owner access required'}), 403
+    
+    snapshot = {
+        'timestamp': datetime.now().isoformat(),
+        'users': load_users(),
+        'businesses': load_businesses(),
+        'config': load_config(),
+        'stocks': load_stocks(),
+        'shop': load_shop(),
+    }
+    return jsonify(snapshot)
 
 @bp.route('/api/toggle_shutdown', methods=['POST'])
 def toggle_shutdown():
@@ -4728,14 +4817,14 @@ def play_slots():
     
     # Validate bet amount
     if bet not in [100, 500, 1000, 5000, 10000]:
-        return jsonify({'error': 'Invalid bet amount'}), 400
+        return jsonify({'success': False, 'error': 'Invalid bet amount'})
     
     users = load_users()
     user = users[user_id]
     
     # Check sufficient funds
     if not has_sufficient_funds(user, bet):
-        return jsonify({'error': 'Insufficient funds'}), 400
+        return jsonify({'success': False, 'error': 'Insufficient funds'})
     
     # Deduct bet
     deduct_funds(user, bet)
@@ -4828,14 +4917,14 @@ def start_blackjack():
     
     # Validate bet
     if bet < 100:
-        return jsonify({'error': 'Minimum bet is $100'}), 400
+        return jsonify({'success': False, 'error': 'Minimum bet is $100'})
     
     users = load_users()
     user = users[user_id]
     
     # Check sufficient funds
     if not has_sufficient_funds(user, bet):
-        return jsonify({'error': 'Insufficient funds'}), 400
+        return jsonify({'success': False, 'error': 'Insufficient funds'})
     
     # Deduct bet
     deduct_funds(user, bet)
