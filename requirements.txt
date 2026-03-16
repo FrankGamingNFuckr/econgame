@@ -3,9 +3,6 @@
 # Core Framework
 Flask>=3.0.0
 
-# Production Server
-gunicorn>=21.0.0
-
 # Security & Rate Limiting
 flask-limiter>=3.5.0
 
