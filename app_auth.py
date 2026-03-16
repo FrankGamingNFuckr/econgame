@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory
 import random
 import secrets
 import json
@@ -19,18 +19,30 @@ except ImportError:
     pass  # python-dotenv not installed, that's okay
 
 app = Flask(__name__)
+FAVICON_VERSION = '20260315b'
+STATIC_ASSET_VERSION = '20260315c'
 
 # Use environment variable for secret key in production
 app.secret_key = os.environ.get('SECRET_KEY') or secrets.token_hex(16)
 email_serializer = URLSafeTimedSerializer(app.secret_key)
 
+# Session configuration for Remember Me
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)  # 30 days for remember me
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access to session cookie
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
+
 # Register full game API/logic as a blueprint so login and APIs run together
 try:
     from app_full import bp as full_bp
     app.register_blueprint(full_bp)
-except Exception:
-    # Import errors will be surfaced when running; keep import optional here
-    pass
+    print('✅ app_full.py blueprint loaded successfully')
+except Exception as e:
+    print(f'❌ ERROR: Failed to load app_full.py blueprint: {e}')
+    import traceback
+    traceback.print_exc()
+    # Re-raise so the error is visible
+    raise
 
 # Optional: Enable rate limiting if flask-limiter is installed
 try:
@@ -52,6 +64,26 @@ except ImportError:
 # Data directories
 DATA_DIR = Path('game_data')
 DATA_DIR.mkdir(exist_ok=True)
+
+# Serve game images
+@app.route('/game_images/<path:filename>')
+def serve_game_image(filename):
+    """Serve images from the game_images directory"""
+    images_dir = os.path.join(app.root_path, 'game_images')
+    return send_from_directory(images_dir, filename)
+
+@app.route('/favicon.ico')
+def favicon():
+    # Some browsers auto-request /favicon.ico even when a PNG is specified in HTML.
+    images_dir = os.path.join(app.root_path, 'game_images')
+    return send_from_directory(images_dir, 'favicon.png')
+
+@app.context_processor
+def inject_global_template_vars():
+    return {
+        'favicon_url': f'/game_images/favicon.png?v={FAVICON_VERSION}',
+        'static_asset_version': STATIC_ASSET_VERSION
+    }
 
 USERS_FILE = DATA_DIR / 'users.json'
 ACCOUNTS_FILE = DATA_DIR / 'accounts.json'  # Separate file for login credentials
@@ -433,6 +465,12 @@ ROB_FAIL_MESSAGES = [
 
 def ensure_user(username):
     """Ensure user game data exists"""
+    try:
+        from app_full import ensure_user as full_ensure_user
+        return full_ensure_user(username)
+    except Exception:
+        pass
+
     users = load_users()
     if username not in users:
         users[username] = {
@@ -462,6 +500,17 @@ def ensure_user(username):
         }
         save_users(users)
     return users[username]
+
+def get_owner_user_key(users, owner_username):
+    if owner_username in users:
+        return owner_username
+
+    owner_lower = owner_username.lower()
+    for existing_key in users.keys():
+        if existing_key.lower() == owner_lower:
+            return existing_key
+
+    return owner_username
 
 def get_current_user():
     """Get currently logged in username"""
@@ -519,15 +568,23 @@ def jail_user(username, duration_ms):
 
 @app.route('/')
 def index():
+    # If already logged in, redirect to game
+    if session.get('player_id'):
+        return redirect('/game')
     # Show home screen with options to login or register
     return render_template('index.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # If already logged in, redirect to game
+    if request.method == 'GET' and session.get('player_id'):
+        return redirect('/game')
+    
     if request.method == 'POST':
         data = request.json
         username = data.get('username', '').strip().lower()
         password = data.get('password', '')
+        remember_me = data.get('remember_me', False)
         
         if not username or not password:
             return jsonify({'error': 'Username and password required'}), 400
@@ -555,6 +612,7 @@ def login():
             session['player_id'] = owner.get('username')
             session['is_owner'] = True
             session['is_moderator'] = True
+            session.permanent = remember_me
             ensure_user(owner.get('username'))
 
             return jsonify({'success': True, 'message': 'Login successful!'})
@@ -562,9 +620,8 @@ def login():
         # Normal account login path
         account = accounts[username]
 
-        # Enforce verification for accounts created after verification rollout
-        if account.get('email_verified') is False:
-            return jsonify({'error': 'Please verify your email before logging in.'}), 403
+        # Email verification disabled - allow all users to login
+        # (Password reset still requires email)
         
         if not verify_password(account['salt'], account['password_hash'], password):
             return jsonify({'error': 'Invalid username or password'}), 401
@@ -573,11 +630,13 @@ def login():
         session['username'] = username
         # Keep compatibility with game APIs expecting `player_id`
         session['player_id'] = username
+        session.permanent = remember_me
         ensure_user(username)
         
         return jsonify({'success': True, 'message': 'Login successful!'})
     
-    return render_template('login.html')
+    turnstile_site_key = os.environ.get('TURNSTILE_SITE_KEY', '1x00000000000000000000AA')
+    return render_template('login.html', turnstile_site_key=turnstile_site_key)
 
 @app.route('/resend-verification', methods=['POST'])
 def resend_verification():
@@ -636,8 +695,12 @@ def resend_verification():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    # If already logged in, redirect to game
+    if request.method == 'GET' and session.get('player_id'):
+        return redirect('/game')
+    
     if request.method == 'POST':
-        data = request.json
+        data = request.get_json(silent=True) or {}
         username = data.get('username', '').strip().lower()
         email = data.get('email', '').strip().lower()
         password = data.get('password', '')
@@ -654,8 +717,8 @@ def register():
         
         # Check if username/email already exists
         accounts = load_accounts()
-        
-        if username in accounts:
+
+        if username_exists_for_assignment(username):
             return jsonify({'error': 'Username already taken'}), 400
         
         # Check if email already used
@@ -671,8 +734,8 @@ def register():
             'email': email,
             'salt': salt,
             'password_hash': password_hash,
-            'email_verified': False,
-            'email_verified_at': None,
+            'email_verified': True,  # Email verification disabled for easier access
+            'email_verified_at': datetime.now().isoformat(),
             'created_at': datetime.now().isoformat()
         }
         
@@ -681,20 +744,10 @@ def register():
         # Create game data
         ensure_user(username)
 
-        token = generate_email_verification_token(email)
-        email_sent, verification_link = send_verification_email(email, username, token)
-
-        if email_sent:
-            return jsonify({
-                'success': True,
-                'message': 'Account created! Verification email sent. Please verify before logging in.'
-            })
-
-        # Dev fallback when SMTP is not configured
+        # Email verification disabled - skip sending verification emails
         return jsonify({
             'success': True,
-            'message': 'Account created! Email service not configured, use the verification link below.',
-            'verification_link': verification_link
+            'message': 'Account created successfully! You can now log in.'
         })
     
     return render_template('register.html')
@@ -732,10 +785,15 @@ def logout():
 
 @app.route('/moderator-login', methods=['GET', 'POST'])
 def moderator_login():
+    # If already logged in as moderator, redirect to game
+    if request.method == 'GET' and session.get('player_id') and session.get('is_moderator'):
+        return redirect('/game')
+    
     if request.method == 'POST':
         data = request.json
         username = data.get('username', 'Moderator').strip()
         admin_key = data.get('admin_key', '').strip()
+        remember_me = data.get('remember_me', False)
         
         if not admin_key:
             return jsonify({'error': 'Admin key required'}), 400
@@ -752,6 +810,7 @@ def moderator_login():
                 session['player_id'] = owner_name
                 session['is_moderator'] = True
                 session['is_owner'] = True
+                session.permanent = remember_me
                 ensure_user(owner_name)
                 return jsonify({
                     'success': True,
@@ -765,6 +824,7 @@ def moderator_login():
             # Ensure APIs using `player_id` work for moderators as well
             session['player_id'] = username
             session['is_moderator'] = True
+            session.permanent = remember_me
             
             # Ensure user data exists (moderators can also play)
             ensure_user(username)
@@ -782,7 +842,8 @@ def moderator_login():
         else:
             return jsonify({'error': 'Invalid admin key or key not assigned to this username'}), 401
     
-    return render_template('moderator_login.html')
+    turnstile_site_key = os.environ.get('TURNSTILE_SITE_KEY', '1x00000000000000000000AA')
+    return render_template('moderator_login.html', turnstile_site_key=turnstile_site_key)
 
 
 @app.route('/owner-login', methods=['GET', 'POST'])
@@ -790,10 +851,15 @@ def owner_login():
     """Owner-only login. Owner credentials are stored in game_data/owner.json
     The script `scripts/create_owner.py` generates a secure password and writes
     a salted hash to that file."""
+    # If already logged in as owner, redirect to owner dashboard
+    if request.method == 'GET' and session.get('player_id') and session.get('is_owner'):
+        return redirect('/owner-dashboard')
+    
     if request.method == 'POST':
         data = request.json
         username = data.get('username', '').strip()
         password = data.get('password', '')
+        remember_me = data.get('remember_me', False)
 
         if not username or not password:
             return jsonify({'error': 'Username and password required'}), 400
@@ -825,13 +891,15 @@ def owner_login():
         session['is_owner'] = True
         session['is_moderator'] = True
         session['player_id'] = username
+        session.permanent = remember_me
 
         # Ensure game user data exists
         ensure_user(username)
 
         return jsonify({'success': True, 'message': 'Owner login successful!'})
 
-    return render_template('owner_login.html')
+    turnstile_site_key = os.environ.get('TURNSTILE_SITE_KEY', '1x00000000000000000000AA')
+    return render_template('owner_login.html', turnstile_site_key=turnstile_site_key)
 
 
 @app.route('/owner-dashboard')
@@ -956,6 +1024,247 @@ def api_usernames():
     # Keep payload lightweight
     return jsonify({'usernames': filtered[:200]})
 
+# ============================================================================
+# ECONOMIC RATE MANAGEMENT APIS
+# ============================================================================
+
+@app.route('/api/owner/economic-rates')
+def get_economic_rates():
+    """Owner-only: Get current economic rates from config"""
+    auth = require_owner()
+    if auth:
+        return auth
+    
+    config = load_config()
+    rates = {
+        'taxRate': config.get('taxRate', 0.1),
+        'highIncomeRate': config.get('highIncomeRate', 0.25),
+        'govTaxPercent': config.get('govTaxPercent', 21),
+        'inflation': config.get('inflation', 0.02)
+    }
+    return jsonify({'success': True, 'rates': rates})
+
+@app.route('/api/owner/update-economic-rates', methods=['POST'])
+def update_economic_rates():
+    """Owner-only: Update economic rates immediately"""
+    auth = require_owner()
+    if auth:
+        return auth
+    
+    data = request.json
+    
+    taxRate = data.get('taxRate')
+    highIncomeRate = data.get('highIncomeRate')
+    govTaxPercent = data.get('govTaxPercent')
+    inflation = data.get('inflation')
+    
+    if any(v is None for v in [taxRate, highIncomeRate, govTaxPercent, inflation]):
+        return jsonify({'error': 'All rate fields required'}), 400
+    
+    config = load_config()
+    config['taxRate'] = float(taxRate)
+    config['highIncomeRate'] = float(highIncomeRate)
+    config['govTaxPercent'] = int(govTaxPercent)
+    config['inflation'] = float(inflation)
+    save_config(config)
+    
+    return jsonify({'success': True, 'message': 'Economic rates updated successfully'})
+
+@app.route('/api/owner/rate-change-requests')
+def get_rate_change_requests():
+    """Owner-only: Get pending rate change requests from moderators"""
+    auth = require_owner()
+    if auth:
+        return auth
+    
+    # Load owner's notifications that are rate change requests
+    owner = load_owner_credentials()
+    if not owner:
+        return jsonify({'requests': []})
+    
+    owner_username = owner.get('username', '').strip()
+    users = load_users()
+    owner_user_key = get_owner_user_key(users, owner_username)
+    
+    if owner_user_key not in users:
+        return jsonify({'requests': []})
+    
+    owner_user_data = users[owner_user_key]
+    notifications = owner_user_data.get('notifications', [])
+    
+    # Filter for rate change request notifications
+    requests = []
+    for notif in notifications:
+        if notif.get('type') == 'rate_change_request' and not notif.get('read'):
+            requests.append({
+                'id': notif['id'],
+                'from_moderator': notif.get('from_moderator', 'Unknown'),
+                'changes': notif.get('changes', {}),
+                'reason': notif.get('reason', ''),
+                'timestamp': notif.get('createdAt', '')
+            })
+    
+    return jsonify({'requests': requests})
+
+@app.route('/api/owner/approve-rate-request', methods=['POST'])
+def approve_rate_request():
+    """Owner-only: Approve and apply a moderator's rate change request"""
+    auth = require_owner()
+    if auth:
+        return auth
+    
+    data = request.json
+    request_id = data.get('requestId')
+    
+    if not request_id:
+        return jsonify({'error': 'Request ID required'}), 400
+    
+    # Load owner's notifications
+    owner = load_owner_credentials()
+    owner_username = owner.get('username', '').strip()
+    users = load_users()
+    owner_user_key = get_owner_user_key(users, owner_username)
+    
+    if owner_user_key not in users:
+        return jsonify({'error': 'Owner user data not found'}), 404
+    
+    owner_user_data = users[owner_user_key]
+    notifications = owner_user_data.get('notifications', [])
+    
+    # Find the request
+    request_notif = None
+    for notif in notifications:
+        if notif.get('id') == int(request_id) and notif.get('type') == 'rate_change_request':
+            request_notif = notif
+            break
+    
+    if not request_notif:
+        return jsonify({'error': 'Request not found'}), 404
+    
+    # Apply the changes
+    config = load_config()
+    changes = request_notif.get('changes', {})
+    
+    if 'taxRate' in changes:
+        config['taxRate'] = float(changes['taxRate'])
+    if 'highIncomeRate' in changes:
+        config['highIncomeRate'] = float(changes['highIncomeRate'])
+    if 'govTaxPercent' in changes:
+        config['govTaxPercent'] = int(changes['govTaxPercent'])
+    if 'inflation' in changes:
+        config['inflation'] = float(changes['inflation'])
+    
+    save_config(config)
+    
+    # Mark notification as read
+    request_notif['read'] = True
+    save_users(users)
+    
+    # Send confirmation notification to the moderator
+    moderator_name = request_notif.get('from_moderator', '').lower()
+    if moderator_name in users:
+        from app_full import add_notification
+        add_notification(
+            users[moderator_name],
+            f"✅ Your economic rate change request has been approved by the owner!",
+            'success'
+        )
+        save_users(users)
+    
+    return jsonify({'success': True, 'message': 'Rate changes applied successfully'})
+
+@app.route('/api/owner/dismiss-rate-request', methods=['POST'])
+def dismiss_rate_request():
+    """Owner-only: Dismiss a moderator's rate change request without applying"""
+    auth = require_owner()
+    if auth:
+        return auth
+    
+    data = request.json
+    request_id = data.get('requestId')
+    
+    if not request_id:
+        return jsonify({'error': 'Request ID required'}), 400
+    
+    # Load owner's notifications
+    owner = load_owner_credentials()
+    owner_username = owner.get('username', '').strip()
+    users = load_users()
+    owner_user_key = get_owner_user_key(users, owner_username)
+    
+    if owner_user_key not in users:
+        return jsonify({'error': 'Owner user data not found'}), 404
+    
+    owner_user_data = users[owner_user_key]
+    notifications = owner_user_data.get('notifications', [])
+    
+    # Find and mark as read
+    for notif in notifications:
+        if notif.get('id') == int(request_id) and notif.get('type') == 'rate_change_request':
+            notif['read'] = True
+            save_users(users)
+            return jsonify({'success': True, 'message': 'Request dismissed'})
+    
+    return jsonify({'error': 'Request not found'}), 404
+
+@app.route('/api/moderator/request-rate-change', methods=['POST'])
+def moderator_request_rate_change():
+    """Moderator-only: Request economic rate changes from owner"""
+    if not session.get('is_moderator'):
+        return jsonify({'error': 'Moderator access required'}), 403
+    
+    data = request.json
+    changes = data.get('changes', {})
+    reason = data.get('reason', '').strip()
+    
+    if not changes:
+        return jsonify({'error': 'No changes specified'}), 400
+    
+    moderator_name = session.get('username', 'Unknown')
+    
+    # Load owner's user data to add notification
+    owner = load_owner_credentials()
+    if not owner:
+        return jsonify({'error': 'Owner not found'}), 500
+    
+    owner_username = owner.get('username', '').strip()
+    users = load_users()
+    owner_user_key = get_owner_user_key(users, owner_username)
+    
+    if owner_user_key not in users:
+        ensure_user(owner_username)
+        users = load_users()
+        owner_user_key = get_owner_user_key(users, owner_username)
+    
+    owner_user_data = users[owner_user_key]
+    
+    # Ensure notification fields exist
+    if 'notifications' not in owner_user_data:
+        owner_user_data['notifications'] = []
+    if 'nextNotificationId' not in owner_user_data:
+        owner_user_data['nextNotificationId'] = 1
+    
+    # Create rate change request notification
+    notification = {
+        'id': owner_user_data['nextNotificationId'],
+        'type': 'rate_change_request',
+        'message': f"📊 Moderator {moderator_name} requests economic rate changes",
+        'level': 'warning',
+        'read': False,
+        'createdAt': datetime.now().isoformat(),
+        'from_moderator': moderator_name,
+        'changes': changes,
+        'reason': reason
+    }
+    
+    owner_user_data['nextNotificationId'] += 1
+    owner_user_data['notifications'].append(notification)
+    owner_user_data['notifications'] = owner_user_data['notifications'][-100:]
+    
+    save_users(users)
+    
+    return jsonify({'success': True, 'message': 'Rate change request sent to owner'})
+
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
     if request.method == 'POST':
@@ -1065,15 +1374,16 @@ def game():
     
     # Pass both username and moderator status to template
     is_moderator = session.get('is_moderator', False)
+    is_owner = session.get('is_owner', False)
     username = session.get('username', 'Player')
     
-    return render_template('game.html', username=username, is_moderator=is_moderator)
+    return render_template('game.html', username=username, is_moderator=is_moderator, is_owner=is_owner)
 
 # The full game API routes are provided by the `app_full` blueprint.
 # They are registered above when `app_full.bp` is imported.
 
-if __name__ == '__main__':
-    # Initialize default data files
+def initialize_game_data():
+    """Initialize default data files if they don't exist."""
     if not STOCKS_FILE.exists():
         save_stocks(load_stocks())
     if not CRYPTO_FILE.exists():
@@ -1091,9 +1401,6 @@ if __name__ == '__main__':
     if not ADMIN_KEYS_FILE.exists():
         admin_keys = {}
         # Generate 5 admin keys for testing
-        print("\n" + "="*60)
-        print("ADMIN KEYS GENERATED (Save these!)")
-        print("="*60)
         for i in range(5):
             key = generate_admin_key()
             admin_keys[key] = {
@@ -1103,23 +1410,20 @@ if __name__ == '__main__':
                 'last_used': None,
                 'last_username': None
             }
-            print(f"Admin Key #{i+1}: {key}")
-        print("="*60)
-        print(f"Keys saved to: {ADMIN_KEYS_FILE}")
-        print("Use these keys at /moderator-login to access admin features")
-        print("="*60 + "\n")
         save_admin_keys(admin_keys)
-    else:
-        # Print existing admin keys
-        keys = load_admin_keys()
-        active_keys = [k for k, v in keys.items() if v.get('active', True)]
-        if active_keys:
-            print(f"\n{len(active_keys)} active admin key(s) available")
-            print(f"   View them at: {ADMIN_KEYS_FILE}")
+        print(f"Generated {len(admin_keys)} admin keys (available in {ADMIN_KEYS_FILE})")
     
-    # For production deployment, use a proper WSGI server like Gunicorn
-    # app.run(host='0.0.0.0', port=5000)
-    
+    # Print active admin keys count
+    keys = load_admin_keys()
+    active_keys = [k for k, v in keys.items() if v.get('active', True)]
+    if active_keys:
+        print(f"{len(active_keys)} active admin key(s) available")
+
+# Initialize game data when module is imported (works for both development and production)
+initialize_game_data()
+
+if __name__ == '__main__':
+    # Development server startup messages
     print("\nStarting EconGame server...")
     print("   Home: http://127.0.0.1:5000")
     print("   Player Login: http://127.0.0.1:5000/login")
