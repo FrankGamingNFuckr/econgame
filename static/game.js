@@ -371,13 +371,25 @@ async function createAccount(type) {
     }
 }
 
-function setDepositAmount(amount) {
+async function setDepositAmount(amount) {
     const input = document.getElementById('deposit-amount');
     if (amount === 'all') {
-        const pockets = currentBalance?.pockets || 0;
-        input.value = pockets;
-        if (pockets <= 0) {
-            showModal('❌ No cash in pockets to deposit');
+        // Fetch fresh balance data for "All" button to prevent stale data issues
+        try {
+            const response = await fetch('/api/balance');
+            const data = await response.json();
+            const pockets = data.pockets || 0;
+            input.value = pockets;
+            if (pockets <= 0) {
+                showModal('❌ No cash in pockets to deposit');
+            }
+        } catch (error) {
+            // Fallback to cached balance if fetch fails
+            const pockets = currentBalance?.pockets || 0;
+            input.value = pockets;
+            if (pockets <= 0) {
+                showModal('❌ No cash in pockets to deposit');
+            }
         }
     } else {
         input.value = amount;
@@ -385,7 +397,8 @@ function setDepositAmount(amount) {
 }
 
 async function deposit() {
-    const amount = parseInt(document.getElementById('deposit-amount').value);
+    const amountStr = document.getElementById('deposit-amount').value;
+    const amount = parseInt(amountStr);
     const target = document.getElementById('deposit-target').value;
     
     if (!amount || isNaN(amount) || amount <= 0) {
@@ -420,15 +433,27 @@ async function deposit() {
     }
 }
 
-function setWithdrawAmount(amount) {
+async function setWithdrawAmount(amount) {
     const input = document.getElementById('withdraw-amount');
     const source = document.getElementById('withdraw-source').value;
     
     if (amount === 'all') {
-        const maxAmount = currentBalance?.[source] || 0;
-        input.value = maxAmount;
-        if (maxAmount <= 0) {
-            showModal(`❌ No funds available in ${source}`);
+        // Fetch fresh balance data for "All" button to prevent stale data issues
+        try {
+            const response = await fetch('/api/balance');  
+            const data = await response.json();
+            const maxAmount = data[source] || 0;
+            input.value = maxAmount;
+            if (maxAmount <= 0) {
+                showModal(`❌ No funds available in ${source}`);
+            }
+        } catch (error) {
+            // Fallback to cached balance if fetch fails
+            const maxAmount = currentBalance?.[source] || 0;
+            input.value = maxAmount;
+            if (maxAmount <= 0) {
+                showModal(`❌ No funds available in ${source}`);
+            }
         }
     } else {
         input.value = amount;
